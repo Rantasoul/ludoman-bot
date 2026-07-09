@@ -2,7 +2,9 @@ package main
 
 import (
 	"database/sql"
+	"fmt"
 	"log"
+	"net/http"
 	"os"
 	"os/signal"
 	"syscall"
@@ -23,6 +25,24 @@ var (
 )
 
 func main() {
+	// ЗАГЛУШКА ДЛЯ RENDER
+	go func() {
+		port := os.Getenv("PORT")
+		if port == "" {
+			port = "8080"
+		}
+
+		// Render будет раз в несколько минут заходить сюда, чтобы проверить жив ли бот
+		http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+			fmt.Fprintf(w, "Бот успешно запущен и работает!")
+		})
+
+		log.Printf("[Render] Запуск веб-заглушки на порту %s", port)
+		if err := http.ListenAndServe(":"+port, nil); err != nil {
+			log.Printf("[Render] Ошибка веб-сервера: %v", err)
+		}
+	}()
+
 	// Загружаем .env
 	err := godotenv.Load()
 	if err != nil {

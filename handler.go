@@ -6,8 +6,9 @@ import (
 	"log"
 	"regexp"
 	"strconv"
-	_ "github.com/lib/pq"          
+
 	"github.com/bwmarrin/discordgo"
+	_ "github.com/lib/pq"
 )
 
 // Авто-приветствие при входе нового игрока на сервер
@@ -48,9 +49,8 @@ func sendRegButton(s *discordgo.Session, userID string, channelID string) {
 // Основной распределитель всех интеракций на сервере
 func HandleInteractions(s *discordgo.Session, i *discordgo.InteractionCreate) {
 
-	
 	// 1. СЛЕШ-КОМАНДЫ (/opros и /setup_reg)
-	
+
 	if i.Type == discordgo.InteractionApplicationCommand {
 		switch i.ApplicationCommandData().Name {
 		case "opros":
@@ -103,11 +103,16 @@ func HandleInteractions(s *discordgo.Session, i *discordgo.InteractionCreate) {
 			s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
 				Type: discordgo.InteractionResponseChannelMessageWithSource,
 				Data: &discordgo.InteractionResponseData{
-					Content: "Приветствую на сервере УДОВОЛЬСТВИЕ! Нажми кнопку ниже, чтобы пройти регистрацию.",
+					Content: "Нажми кнопку, чтобы отправить приветствие новичкам:",
+					Flags:   discordgo.MessageFlagsEphemeral,
 					Components: []discordgo.MessageComponent{
 						discordgo.ActionsRow{
 							Components: []discordgo.MessageComponent{
-								discordgo.Button{Label: "📝 Пройти регистрацию", Style: discordgo.PrimaryButton, CustomID: "start_registration"},
+								discordgo.Button{
+									Label:    "📝 Отправить регистрацию",
+									Style:    discordgo.PrimaryButton,
+									CustomID: "admin_send_reg",
+								},
 							},
 						},
 					},
@@ -117,9 +122,8 @@ func HandleInteractions(s *discordgo.Session, i *discordgo.InteractionCreate) {
 		return
 	}
 
-	
 	// 2. ОБРАБОТКА НАЖАТИЙ НА КНОПКИ
-	
+
 	if i.Type == discordgo.InteractionMessageComponent {
 		customID := i.MessageComponentData().CustomID
 
@@ -284,9 +288,8 @@ func HandleInteractions(s *discordgo.Session, i *discordgo.InteractionCreate) {
 		return
 	}
 
-	
 	// 3. ОБРАБОТКА МОДАЛЬНЫХ ОКОН
-	
+
 	if i.Type == discordgo.InteractionModalSubmit {
 		if i.ModalSubmitData().CustomID == "registration_modal" {
 			var dotaNick, realName, dotaMMR string

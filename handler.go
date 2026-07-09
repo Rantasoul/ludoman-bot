@@ -47,9 +47,9 @@ func sendRegButton(s *discordgo.Session, userID string, channelID string) {
 // Основной распределитель всех интеракций на сервере
 func HandleInteractions(s *discordgo.Session, i *discordgo.InteractionCreate) {
 
-	// ==========================================
+	
 	// 1. СЛЕШ-КОМАНДЫ (/opros и /setup_reg)
-	// ==========================================
+	
 	if i.Type == discordgo.InteractionApplicationCommand {
 		switch i.ApplicationCommandData().Name {
 		case "opros":
@@ -83,7 +83,7 @@ func HandleInteractions(s *discordgo.Session, i *discordgo.InteractionCreate) {
 				},
 			})
 
-			// Выкатываем пульт лобби со счетчиками (0)
+			// Выкатываем пульт лобби со счетчиками 
 			_, err := s.ChannelMessageSendComplex(LobbyChannelID, &discordgo.MessageSend{
 				Content: msgText,
 				Components: []discordgo.MessageComponent{
@@ -118,9 +118,9 @@ func HandleInteractions(s *discordgo.Session, i *discordgo.InteractionCreate) {
 		return
 	}
 
-	// ==========================================
+	
 	// 2. ОБРАБОТКА НАЖАТИЙ НА КНОПКИ (СЧЁТЧИКИ)
-	// ==========================================
+	
 	if i.Type == discordgo.InteractionMessageComponent {
 		customID := i.MessageComponentData().CustomID
 
@@ -169,7 +169,7 @@ func HandleInteractions(s *discordgo.Session, i *discordgo.InteractionCreate) {
 				actionRow.Components[idx] = button
 			}
 
-			// Твои кастомные текстовые фидбеки на кнопки
+			
 			var userFeedback string
 			switch customID {
 			case "lobby_go":
@@ -201,9 +201,9 @@ func HandleInteractions(s *discordgo.Session, i *discordgo.InteractionCreate) {
 		return
 	}
 
-	// ==========================================
+	
 	// 3. ОБРАБОТКА ОТПРАВКИ МОДАЛЬНЫХ ОКНО (АНКЕТ)
-	// ==========================================
+	
 	if i.Type == discordgo.InteractionModalSubmit {
 		if i.ModalSubmitData().CustomID == "registration_modal" {
 			var dotaNick, realName, dotaMMR string
@@ -223,10 +223,10 @@ func HandleInteractions(s *discordgo.Session, i *discordgo.InteractionCreate) {
 				}
 			}
 
-			// Склеиваем никнейм по твоему кастомному шаблону
+			// Склеиваем никнейм 
 			newNickname := fmt.Sprintf("%s | %s | %s", dotaNick, realName, dotaMMR)
 
-			// Твоя фирменная проверка на лимит никнейма в Discord
+			// проверка на лимит никнейма в Discord
 			if len([]rune(newNickname)) > 32 {
 				s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
 					Type: discordgo.InteractionResponseChannelMessageWithSource,
@@ -238,10 +238,28 @@ func HandleInteractions(s *discordgo.Session, i *discordgo.InteractionCreate) {
 				return
 			}
 
-			_ = s.GuildMemberNickname(i.GuildID, i.Member.User.ID, newNickname)
-			_ = s.GuildMemberRoleAdd(i.GuildID, i.Member.User.ID, TargetRoleID)
+			// Пытаемся сменить ник 
+			err = s.GuildMemberNickname(i.GuildID, i.Member.User.ID, newNickname)
+			if err != nil {
+				log.Printf("Не удалось изменить ник пользователю %s: %v", i.Member.User.ID, err)
+				// Не блокируем процесс, если бот не может сменить ник админу/овнеру
+			}
 
-			// Твой легендарный публичный ответ на весь сервер!
+			// Выдаем роль
+			err = s.GuildMemberRoleAdd(i.GuildID, i.Member.User.ID, TargetRoleID)
+			if err != nil {
+				log.Printf("Не удалось выдать роль пользователю %s: %v", i.Member.User.ID, err)
+				s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
+					Type: discordgo.InteractionResponseChannelMessageWithSource,
+					Data: &discordgo.InteractionResponseData{
+						Content: "❌ Не удалось выдать роль. Скорее всего, роль бота находится ниже целевой роли в настройках сервера.",
+						Flags:   discordgo.MessageFlagsEphemeral,
+					},
+				})
+				return
+			}
+
+			// ответ на ервер!
 			s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
 				Type: discordgo.InteractionResponseChannelMessageWithSource,
 				Data: &discordgo.InteractionResponseData{

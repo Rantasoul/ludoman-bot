@@ -335,13 +335,55 @@ func HandleInteractions(s *discordgo.Session, i *discordgo.InteractionCreate) {
 				return
 			}
 
+			// есть ли у пользователя уже роль
+
+			member, err := s.GuildMember(i.GuildID, i.Member.User.ID)
+			if err != nil {
+				log.Printf("Не удалось получить информацию о пользователе: %v", err)
+				s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
+					Type: discordgo.InteractionResponseChannelMessageWithSource,
+					Data: &discordgo.InteractionResponseData{
+						Content: "❌ Ошибка при проверке профиля. Попробуйте позже.",
+						Flags:   discordgo.MessageFlagsEphemeral,
+					},
+				})
+				return
+			}
+
+			// Проверяем, есть ли у пользователя целевая роль
+			hasRole := false
+			for _, roleID := range member.Roles {
+				if roleID == TargetRoleID {
+					hasRole = true
+					break
+				}
+			}
+
 			// Меняем ник
 			err = s.GuildMemberNickname(i.GuildID, i.Member.User.ID, newNickname)
 			if err != nil {
 				log.Printf("Не удалось изменить ник пользователю %s: %v", i.Member.User.ID, err)
 			}
 
-			// Выдаем роль
+			// Если роль ЕСТЬ - просто обновляем данные
+			if hasRole {
+				// Ответ для уже зарегистрированного пользователя
+				s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
+					Type: discordgo.InteractionResponseChannelMessageWithSource,
+					Data: &discordgo.InteractionResponseData{
+						Content: fmt.Sprintf("✅ **%s** обновил свои данные!\nНик изменён на: **%s**", i.Member.User.Mention(), newNickname),
+						Flags:   discordgo.MessageFlagsEphemeral,
+					},
+				})
+
+				// Дополнительно: можно отправить сообщение в канал, что кто-то обновился
+				if WelcomeChannelID != "" {
+					s.ChannelMessageSend(WelcomeChannelID, fmt.Sprintf("📝 Лудик <@%s> обновил свой профиль! Новый ник нюхача: **%s**", i.Member.User.ID, newNickname))
+				}
+				return
+			}
+
+			// Если роли НЕТ - выдаём роль как нового игрока
 			err = s.GuildMemberRoleAdd(i.GuildID, i.Member.User.ID, TargetRoleID)
 			if err != nil {
 				log.Printf("Не удалось выдать роль пользователю %s: %v", i.Member.User.ID, err)

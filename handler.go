@@ -3,11 +3,13 @@ package main
 import (
 	"fmt"
 	"log"
+	"regexp"
+	"strconv"
 
 	"github.com/bwmarrin/discordgo"
 )
 
-// Авто-приветствие при входе
+// Авто-приветствие при входе нового игрока на сервер
 func HandleUserJoin(s *discordgo.Session, m *discordgo.GuildMemberAdd) {
 	if WelcomeChannelID == "" {
 		log.Println("Ошибка: Не задан WELCOME_CHANNEL_ID в .env")
@@ -16,6 +18,7 @@ func HandleUserJoin(s *discordgo.Session, m *discordgo.GuildMemberAdd) {
 	sendRegButton(s, m.User.ID, WelcomeChannelID)
 }
 
+// Вспомогательная функция, которая рисует сообщение с кнопкой регистрации
 func sendRegButton(s *discordgo.Session, userID string, channelID string) {
 	content := "Приветствую на сервере УДОВОЛЬСТВИЕ! Нажми кнопку ниже, чтобы пройти регистрацию."
 	if userID != "" {
@@ -41,11 +44,16 @@ func sendRegButton(s *discordgo.Session, userID string, channelID string) {
 	}
 }
 
+// Основной распределитель всех интеракций на сервере
 func HandleInteractions(s *discordgo.Session, i *discordgo.InteractionCreate) {
-	// 1. СЛЕШ-КОМАНДЫ
+
+	
+	// 1. СЛЕШ-КОМАНДЫ (/opros и /setup_reg)
+	
 	if i.Type == discordgo.InteractionApplicationCommand {
 		switch i.ApplicationCommandData().Name {
 		case "opros":
+			// Проверяем, в том ли чате вызвана команда
 			if i.ChannelID != LobbyChannelID {
 				s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
 					Type: discordgo.InteractionResponseChannelMessageWithSource,
@@ -60,12 +68,13 @@ func HandleInteractions(s *discordgo.Session, i *discordgo.InteractionCreate) {
 			var inputTime string
 			options := i.ApplicationCommandData().Options
 			if len(options) > 0 {
-				// Берем первый элемент среза [0] и вытаскиваем из него строку
 				inputTime = options[0].StringValue()
 			}
 
+			// Тегаем роль DotaRoleID из .env через формат <@&ID>
 			msgText := fmt.Sprintf("🔔 **СБОР НА КАТКУ!** <@&%s>\n📊 Собираем лобби 5х5 в **%s**", DotaRoleID, inputTime)
 
+			// Отвечаем админу скрытым сообщением об успехе
 			s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
 				Type: discordgo.InteractionResponseChannelMessageWithSource,
 				Data: &discordgo.InteractionResponseData{
@@ -74,14 +83,15 @@ func HandleInteractions(s *discordgo.Session, i *discordgo.InteractionCreate) {
 				},
 			})
 
+			// Выкатываем пульт лобби со счетчиками 
 			_, err := s.ChannelMessageSendComplex(LobbyChannelID, &discordgo.MessageSend{
 				Content: msgText,
 				Components: []discordgo.MessageComponent{
 					discordgo.ActionsRow{
 						Components: []discordgo.MessageComponent{
-							discordgo.Button{Label: "Газ", Style: discordgo.SuccessButton, CustomID: "lobby_go", Emoji: &discordgo.ComponentEmoji{Name: "✅"}},
-							discordgo.Button{Label: "Я долбоеб", Style: discordgo.DangerButton, CustomID: "lobby_clown", Emoji: &discordgo.ComponentEmoji{Name: "🤡"}},
-							discordgo.Button{Label: "Позже", Style: discordgo.SecondaryButton, CustomID: "lobby_later", Emoji: &discordgo.ComponentEmoji{Name: "⏳"}},
+							discordgo.Button{Label: "Я буду (0)", Style: discordgo.SuccessButton, CustomID: "lobby_go", Emoji: &discordgo.ComponentEmoji{Name: "✅"}},
+							discordgo.Button{Label: "Я долбоеб (0)", Style: discordgo.DangerButton, CustomID: "lobby_clown", Emoji: &discordgo.ComponentEmoji{Name: "🤡"}},
+							discordgo.Button{Label: "Позже (0)", Style: discordgo.SecondaryButton, CustomID: "lobby_later", Emoji: &discordgo.ComponentEmoji{Name: "⏳"}},
 						},
 					},
 				},
@@ -108,10 +118,13 @@ func HandleInteractions(s *discordgo.Session, i *discordgo.InteractionCreate) {
 		return
 	}
 
-	// 2. КНОПКИ
+	
+	// 2. ОБРАБОТКА НАЖАТИЙ НА КНОПКИ (СЧЁТЧИКИ)
+	
 	if i.Type == discordgo.InteractionMessageComponent {
 		customID := i.MessageComponentData().CustomID
 
+		// Кнопка открытия анкеты верификации фриков
 		if customID == "start_registration" {
 			s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
 				Type: discordgo.InteractionResponseModal,
@@ -128,27 +141,69 @@ func HandleInteractions(s *discordgo.Session, i *discordgo.InteractionCreate) {
 			return
 		}
 
-		switch customID {
-		case "lobby_go":
-			s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
-				Type: discordgo.InteractionResponseChannelMessageWithSource,
-				Data: &discordgo.InteractionResponseData{Content: fmt.Sprintf("✅ Игрок <@%s> подтвердил, что готов катать!", i.Member.User.ID)},
+		// Логика пересчета
+		if customID == "lobby_go" || customID == "lobby_clown" || customID == "lobby_later" {
+			message := i.Message
+			actionRow := message.Components[0].(*discordgo.ActionsRow)
+			re := regexp.MustCompile(`\((\d+)\)`)
+
+			for idx, component := range actionRow.Components {
+				button := component.(*discordgo.Button)
+
+				if button.CustomID == customID {
+					matches := re.FindStringSubmatch(button.Label)
+					if len(matches) > 1 {
+						currentCount, _ := strconv.Atoi(matches[1])
+						newCount := currentCount + 1
+
+						switch customID {
+						case "lobby_go":
+							button.Label = fmt.Sprintf("Я буду (%d)", newCount)
+						case "lobby_clown":
+							button.Label = fmt.Sprintf("Я долбоеб (%d)", newCount)
+						case "lobby_later":
+							button.Label = fmt.Sprintf("Позже (%d)", newCount)
+						}
+					}
+				}
+				actionRow.Components[idx] = button
+			}
+
+			
+			var userFeedback string
+			switch customID {
+			case "lobby_go":
+				userFeedback = fmt.Sprintf("✅ Игрок <@%s> подтвердил, что готов катать!", i.Member.User.ID)
+			case "lobby_clown":
+				userFeedback = fmt.Sprintf("🤡 <@%s> нажал кнопку 'Я долбоеб' и слился с катки.", i.Member.User.ID)
+			case "lobby_later":
+				userFeedback = fmt.Sprintf("⏳ <@%s> просит подождать его, подлетит позже.", i.Member.User.ID)
+			}
+
+			// 1. Редактируем сообщение пульта в Дискорде, обновляя цифры счетчика
+			_, err := s.ChannelMessageEditComplex(&discordgo.MessageEdit{
+				ID:         message.ID,
+				Channel:    message.ChannelID,
+				Components: &[]discordgo.MessageComponent{actionRow},
 			})
-		case "lobby_clown":
+			if err != nil {
+				log.Printf("Не удалось обновить счетчики на кнопках: %v", err)
+			}
+
+			// 2. Выводим обычное текстовое сообщение в чат лобби
 			s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
 				Type: discordgo.InteractionResponseChannelMessageWithSource,
-				Data: &discordgo.InteractionResponseData{Content: fmt.Sprintf("🤡 <@%s> нажал кнопку 'Я долбоеб' и слился с катки.", i.Member.User.ID)},
-			})
-		case "lobby_later":
-			s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
-				Type: discordgo.InteractionResponseChannelMessageWithSource,
-				Data: &discordgo.InteractionResponseData{Content: fmt.Sprintf("⏳ <@%s> просит подождать его, подлетит позже.", i.Member.User.ID)},
+				Data: &discordgo.InteractionResponseData{
+					Content: userFeedback,
+				},
 			})
 		}
 		return
 	}
 
-	// 3. МОДАЛЬНЫЕ ОКНА
+	
+	// 3. ОБРАБОТКА ОТПРАВКИ МОДАЛЬНЫХ ОКНО (АНКЕТ)
+	
 	if i.Type == discordgo.InteractionModalSubmit {
 		if i.ModalSubmitData().CustomID == "registration_modal" {
 			var dotaNick, realName, dotaMMR string
@@ -168,8 +223,10 @@ func HandleInteractions(s *discordgo.Session, i *discordgo.InteractionCreate) {
 				}
 			}
 
+			// Склеиваем никнейм 
 			newNickname := fmt.Sprintf("%s | %s | %s", dotaNick, realName, dotaMMR)
 
+			// проверка на лимит никнейма в Discord
 			if len([]rune(newNickname)) > 32 {
 				s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
 					Type: discordgo.InteractionResponseChannelMessageWithSource,
@@ -181,9 +238,28 @@ func HandleInteractions(s *discordgo.Session, i *discordgo.InteractionCreate) {
 				return
 			}
 
-			_ = s.GuildMemberNickname(i.GuildID, i.Member.User.ID, newNickname)
-			_ = s.GuildMemberRoleAdd(i.GuildID, i.Member.User.ID, TargetRoleID)
+			// Пытаемся сменить ник 
+			err = s.GuildMemberNickname(i.GuildID, i.Member.User.ID, newNickname)
+			if err != nil {
+				log.Printf("Не удалось изменить ник пользователю %s: %v", i.Member.User.ID, err)
+				// Не блокируем процесс, если бот не может сменить ник админу/овнеру
+			}
 
+			// Выдаем роль
+			err = s.GuildMemberRoleAdd(i.GuildID, i.Member.User.ID, TargetRoleID)
+			if err != nil {
+				log.Printf("Не удалось выдать роль пользователю %s: %v", i.Member.User.ID, err)
+				s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
+					Type: discordgo.InteractionResponseChannelMessageWithSource,
+					Data: &discordgo.InteractionResponseData{
+						Content: "❌ Не удалось выдать роль. Скорее всего, роль бота находится ниже целевой роли в настройках сервера.",
+						Flags:   discordgo.MessageFlagsEphemeral,
+					},
+				})
+				return
+			}
+
+			// ответ на ервер!
 			s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
 				Type: discordgo.InteractionResponseChannelMessageWithSource,
 				Data: &discordgo.InteractionResponseData{

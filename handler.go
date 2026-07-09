@@ -103,25 +103,25 @@ func HandleInteractions(s *discordgo.Session, i *discordgo.InteractionCreate) {
 			s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
 				Type: discordgo.InteractionResponseChannelMessageWithSource,
 				Data: &discordgo.InteractionResponseData{
-					Content: "Нажми кнопку, чтобы отправить приветствие новичкам:",
-					Flags:   discordgo.MessageFlagsEphemeral,
+					Content: "👋 Нажми кнопку ниже, чтобы пройти регистрацию!",
+					Flags:   discordgo.MessageFlagsEphemeral, // <-- ДОБАВИТЬ ЭТУ СТРОКУ!
 					Components: []discordgo.MessageComponent{
 						discordgo.ActionsRow{
 							Components: []discordgo.MessageComponent{
 								discordgo.Button{
-									Label:    "📝 Отправить регистрацию",
+									Label:    "📝 Пройти регистрацию",
 									Style:    discordgo.PrimaryButton,
-									CustomID: "admin_send_reg",
+									CustomID: "start_registration",
 								},
 							},
 						},
 					},
 				},
 			})
+			return
 		}
 		return
 	}
-
 	// 2. ОБРАБОТКА НАЖАТИЙ НА КНОПКИ
 
 	if i.Type == discordgo.InteractionMessageComponent {
@@ -212,7 +212,7 @@ func HandleInteractions(s *discordgo.Session, i *discordgo.InteractionCreate) {
 				actionRow.Components[idx] = button
 			}
 
-			// Твои кастомные текстовые фидбеки на кнопки
+			// фидбеки на кнопки
 			var userFeedback string
 			switch customID {
 			case "lobby_go":
@@ -223,7 +223,7 @@ func HandleInteractions(s *discordgo.Session, i *discordgo.InteractionCreate) {
 				userFeedback = fmt.Sprintf("⏳ <@%s> просит подождать его, подлетит позже.", i.Member.User.ID)
 			}
 
-			// Удаляем старое фидбек-сообщение, если оно есть
+			// Удаляем старое фидбек-сообщение
 			if err == nil && oldFeedbackMsgID.Valid && oldFeedbackMsgID.String != "" {
 				errDelete := s.ChannelMessageDelete(message.ChannelID, oldFeedbackMsgID.String)
 				if errDelete != nil {
@@ -261,7 +261,7 @@ func HandleInteractions(s *discordgo.Session, i *discordgo.InteractionCreate) {
 				return
 			}
 
-			// Получаем ID отправленного фидбек-сообщения
+			// Получаем ID отправленного сообщения
 			var newFeedbackID string
 			responseMsg, errFetch := s.InteractionResponse(i.Interaction)
 			if errFetch == nil {

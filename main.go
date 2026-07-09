@@ -6,8 +6,6 @@ import (
 	"log"
 	"net/http"
 	"os"
-	"os/signal"
-	"syscall"
 
 	"github.com/bwmarrin/discordgo"
 	"github.com/joho/godotenv"
@@ -142,11 +140,5 @@ func main() {
 
 	log.Println("🎮 Бот Лудоман успешно запущен и готов к работе!")
 
-	// Ожидаем завершения
-	sc := make(chan os.Signal, 1)
-	signal.Notify(sc, syscall.SIGINT, syscall.SIGTERM, os.Interrupt)
-	<-sc
-	log.Println("👋 Бот отключается...")
-	DB.Close()
-	dg.Close()
+	select {}
 }

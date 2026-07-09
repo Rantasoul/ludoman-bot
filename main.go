@@ -6,6 +6,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"time"
 
 	"github.com/bwmarrin/discordgo"
 	"github.com/joho/godotenv"
@@ -38,6 +39,20 @@ func main() {
 		log.Printf("[Render] Запуск веб-заглушки на порту %s", port)
 		if err := http.ListenAndServe(":"+port, nil); err != nil {
 			log.Printf("[Render] Ошибка веб-сервера: %v", err)
+		}
+	}()
+
+	go func() {
+		for {
+			time.Sleep(1 * time.Minute)
+			url := "https://ludoman-bot-2f0s.onrender.com"
+			resp, err := http.Get(url)
+			if err != nil {
+				log.Printf("Пинг не удался: %v", err)
+			} else {
+				resp.Body.Close()
+				log.Printf("Пинг успешный!")
+			}
 		}
 	}()
 

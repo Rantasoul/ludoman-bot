@@ -47,9 +47,9 @@ func sendRegButton(s *discordgo.Session, userID string, channelID string) {
 // Основной распределитель всех интеракций на сервере
 func HandleInteractions(s *discordgo.Session, i *discordgo.InteractionCreate) {
 
-	// ==========================================
+	
 	// 1. СЛЕШ-КОМАНДЫ (/opros и /setup_reg)
-	// ==========================================
+	
 	if i.Type == discordgo.InteractionApplicationCommand {
 		switch i.ApplicationCommandData().Name {
 		case "opros":
@@ -71,6 +71,7 @@ func HandleInteractions(s *discordgo.Session, i *discordgo.InteractionCreate) {
 				inputTime = options[0].StringValue()
 			}
 
+			// Тегаем роль DotaRoleID из .env через формат <@&ID>
 			msgText := fmt.Sprintf("🔔 **СБОР НА КАТКУ!** <@&%s>\n📊 Собираем лобби 5х5 в **%s**", DotaRoleID, inputTime)
 
 			// Отвечаем админу скрытым сообщением об успехе
@@ -82,7 +83,7 @@ func HandleInteractions(s *discordgo.Session, i *discordgo.InteractionCreate) {
 				},
 			})
 
-			// Выкатываем пульт лобби
+			// Выкатываем пульт лобби со счетчиками 
 			_, err := s.ChannelMessageSendComplex(LobbyChannelID, &discordgo.MessageSend{
 				Content: msgText,
 				Components: []discordgo.MessageComponent{
@@ -117,7 +118,9 @@ func HandleInteractions(s *discordgo.Session, i *discordgo.InteractionCreate) {
 		return
 	}
 
+	
 	// 2. ОБРАБОТКА НАЖАТИЙ НА КНОПКИ (СЧЁТЧИКИ)
+	
 	if i.Type == discordgo.InteractionMessageComponent {
 		customID := i.MessageComponentData().CustomID
 
@@ -166,11 +169,11 @@ func HandleInteractions(s *discordgo.Session, i *discordgo.InteractionCreate) {
 				actionRow.Components[idx] = button
 			}
 
-			// Твои кастомные текстовые фидбеки на кнопки
+			
 			var userFeedback string
 			switch customID {
 			case "lobby_go":
-				userFeedback = fmt.Sprintf("✅ Игрок <@%s> готов чистить ебла!", i.Member.User.ID)
+				userFeedback = fmt.Sprintf("✅ Игрок <@%s> подтвердил, что готов катать!", i.Member.User.ID)
 			case "lobby_clown":
 				userFeedback = fmt.Sprintf("🤡 <@%s> нажал кнопку 'Я долбоеб' и слился с катки.", i.Member.User.ID)
 			case "lobby_later":
@@ -198,8 +201,9 @@ func HandleInteractions(s *discordgo.Session, i *discordgo.InteractionCreate) {
 		return
 	}
 
+	
 	// 3. ОБРАБОТКА ОТПРАВКИ МОДАЛЬНЫХ ОКНО (АНКЕТ)
-
+	
 	if i.Type == discordgo.InteractionModalSubmit {
 		if i.ModalSubmitData().CustomID == "registration_modal" {
 			var dotaNick, realName, dotaMMR string
@@ -219,21 +223,10 @@ func HandleInteractions(s *discordgo.Session, i *discordgo.InteractionCreate) {
 				}
 			}
 
-			// Проверка MMR
-			mmrValue, err := strconv.Atoi(dotaMMR)
-			if err != nil || mmrValue < 0 || mmrValue > 15000 {
-				s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
-					Type: discordgo.InteractionResponseChannelMessageWithSource,
-					Data: &discordgo.InteractionResponseData{
-						Content: "❌ Слышь, фрик, в поле MMR нужно ввести нормальное число (например, 4500). Не выебывайся.",
-						Flags:   discordgo.MessageFlagsEphemeral,
-					},
-				})
-				return
-			}
-
+			// Склеиваем никнейм 
 			newNickname := fmt.Sprintf("%s | %s | %s", dotaNick, realName, dotaMMR)
 
+			// проверка на лимит никнейма в Discord
 			if len([]rune(newNickname)) > 32 {
 				s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
 					Type: discordgo.InteractionResponseChannelMessageWithSource,
@@ -245,7 +238,7 @@ func HandleInteractions(s *discordgo.Session, i *discordgo.InteractionCreate) {
 				return
 			}
 
-			// Пытаемся сменить ник (может упасть ошибка, если это создатель сервера)
+			// Пытаемся сменить ник 
 			err = s.GuildMemberNickname(i.GuildID, i.Member.User.ID, newNickname)
 			if err != nil {
 				log.Printf("Не удалось изменить ник пользователю %s: %v", i.Member.User.ID, err)
@@ -266,7 +259,7 @@ func HandleInteractions(s *discordgo.Session, i *discordgo.InteractionCreate) {
 				return
 			}
 
-			// ответ
+			// ответ на ервер!
 			s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
 				Type: discordgo.InteractionResponseChannelMessageWithSource,
 				Data: &discordgo.InteractionResponseData{

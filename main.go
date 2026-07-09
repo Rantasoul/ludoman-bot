@@ -51,7 +51,6 @@ func main() {
 	if err != nil {
 		log.Fatalf("Ошибка открытия базы данных: %v", err)
 	}
-	defer DB.Close()
 
 	// Проверяем подключение
 	err = DB.Ping()
@@ -92,7 +91,6 @@ func main() {
 	if err != nil {
 		log.Fatalf("Ошибка подключения к Discord: %v", err)
 	}
-	defer dg.Close()
 
 	// Регистрируем слеш-команды
 	log.Println("📝 Регистрация слеш-команд в Discord...")
@@ -129,4 +127,6 @@ func main() {
 	signal.Notify(sc, syscall.SIGINT, syscall.SIGTERM, os.Interrupt)
 	<-sc
 	log.Println("👋 Бот отключается...")
+	DB.Close()
+	dg.Close()
 }

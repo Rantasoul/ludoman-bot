@@ -1,6 +1,7 @@
 package main
 
 import (
+	"database/sql"
 	"fmt"
 	"log"
 	"regexp"
@@ -141,26 +142,65 @@ func HandleInteractions(s *discordgo.Session, i *discordgo.InteractionCreate) {
 		// Логика пересчета
 		if customID == "lobby_go" || customID == "lobby_clown" || customID == "lobby_later" {
 			message := i.Message
+			userID := i.Member.User.ID
+
+			var currentChoice string
+			var switchCount int
+			var oldFeedbackMsgID sql.NullString
+
+			// Запрашиваем информацию о голосовании юзера из Базы Данных
+			err := DB.QueryRow("SELECT current_choice, switch_count, feedback_message_id FROM lobby_votes WHERE message_id = $1 AND user_id = $2", message.ID, userID).
+				Scan(&currentChoice, &switchCount, &oldFeedbackMsgID)
+
+			// Лимит: если чувак пытается переголосовать уже во ВТОРОЙ раз (switch_count >= 1)
+			if err == nil && switchCount >= 1 && currentChoice != customID {
+				s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
+					Type: discordgo.InteractionResponseChannelMessageWithSource,
+					Data: &discordgo.InteractionResponseData{
+						Content: "❌ Ошибка: Не заебывай, больше переобуваться нельзя.",
+						Flags:   discordgo.MessageFlagsEphemeral,
+					},
+				})
+				return
+			}
+
+			// Если он нажимает ту же самую кнопку, на которую уже нажал ранее
+			if err == nil && currentChoice == customID {
+				s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
+					Type: discordgo.InteractionResponseChannelMessageWithSource,
+					Data: &discordgo.InteractionResponseData{
+						Content: "ℹ️ Ты уже выбрал этот вариант",
+						Flags:   discordgo.MessageFlagsEphemeral,
+					},
+				})
+				return
+			}
+
 			actionRow := message.Components[0].(*discordgo.ActionsRow)
 			re := regexp.MustCompile(`\((\d+)\)`)
 
 			for idx, component := range actionRow.Components {
 				button := component.(*discordgo.Button)
 
+				// Если человек переголосовывает, уменьшаем счетчик у его СТАРОГО выбора
+				if err == nil && button.CustomID == currentChoice {
+					matches := re.FindStringSubmatch(button.Label)
+					if len(matches) > 1 {
+						count, _ := strconv.Atoi(matches[1])
+						if count > 0 {
+							count--
+						}
+						button.Label = updateButtonLabel(button.CustomID, count)
+					}
+				}
+
+				// Увеличиваем счетчик у НОВОГО нажатого варианта
 				if button.CustomID == customID {
 					matches := re.FindStringSubmatch(button.Label)
 					if len(matches) > 1 {
-						currentCount, _ := strconv.Atoi(matches[1])
-						newCount := currentCount + 1
-
-						switch customID {
-						case "lobby_go":
-							button.Label = fmt.Sprintf("Я буду (%d)", newCount)
-						case "lobby_clown":
-							button.Label = fmt.Sprintf("Я долбоеб (%d)", newCount)
-						case "lobby_later":
-							button.Label = fmt.Sprintf("Позже (%d)", newCount)
-						}
+						count, _ := strconv.Atoi(matches[1])
+						count++
+						button.Label = updateButtonLabel(button.CustomID, count)
 					}
 				}
 				actionRow.Components[idx] = button
@@ -178,26 +218,45 @@ func HandleInteractions(s *discordgo.Session, i *discordgo.InteractionCreate) {
 			}
 
 			// 1. Редактируем сообщение пульта в Дискорде, обновляя цифры счетчика
-			_, err := s.ChannelMessageEditComplex(&discordgo.MessageEdit{
+			if err == nil && oldFeedbackMsgID.Valid && oldFeedbackMsgID.String != "" {
+				_ = s.ChannelMessageDelete(message.ChannelID, oldFeedbackMsgID.String)
+			}
+
+			// 1. Редактируем сообщение пульта в Дискорде, обновляя цифры счетчика
+			_, _ = s.ChannelMessageEditComplex(&discordgo.MessageEdit{
 				ID:         message.ID,
 				Channel:    message.ChannelID,
 				Components: &[]discordgo.MessageComponent{actionRow},
 			})
-			if err != nil {
-				log.Printf("Не удалось обновить счетчики на кнопках: %v", err)
-			}
 
-			// 2. Выводим обычное текстовое сообщение в чат лобби
+			// 2. Выводим новое текстовое сообщение в чат лобби
 			s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
 				Type: discordgo.InteractionResponseChannelMessageWithSource,
 				Data: &discordgo.InteractionResponseData{
 					Content: userFeedback,
 				},
 			})
+
+			// Извлекаем ID только что отправленного нового текстового сообщения бота
+			newFeedbackMsg, errFetch := s.InteractionResponse(i.Interaction)
+			var newFeedbackID string
+			if errFetch == nil {
+				newFeedbackID = newFeedbackMsg.ID
+			}
+
+			// СОХРАНЯЕМ ИЗМЕНЕНИЯ В ОБЛАЧНУЮ БД NEON
+			if err == sql.ErrNoRows {
+				// Первое нажатие: делаем обычный INSERT
+				_, _ = DB.Exec("INSERT INTO lobby_votes (message_id, user_id, current_choice, switch_count, feedback_message_id) VALUES ($1, $2, $3, $4, $5)",
+					message.ID, userID, customID, 0, newFeedbackID)
+			} else if err == nil {
+				// Переголосование: делаем UPDATE и инкрементируем switch_count
+				_, _ = DB.Exec("UPDATE lobby_votes SET current_choice = $1, switch_count = switch_count + 1, feedback_message_id = $2 WHERE message_id = $3 AND user_id = $4",
+					customID, newFeedbackID, message.ID, userID)
+			}
 		}
 		return
 	}
-
 	// 3. ОБРАБОТКА ОТПРАВКИ МОДАЛЬНЫХ ОКНО (АНКЕТ)
 
 	if i.Type == discordgo.InteractionModalSubmit {
@@ -275,4 +334,15 @@ func HandleInteractions(s *discordgo.Session, i *discordgo.InteractionCreate) {
 			})
 		}
 	}
+}
+func updateButtonLabel(customID string, count int) string {
+	switch customID {
+	case "lobby_go":
+		return fmt.Sprintf("Я буду (%d)", count)
+	case "lobby_clown":
+		return fmt.Sprintf("Я долбоеб (%d)", count)
+	case "lobby_later":
+		return fmt.Sprintf("Позже (%d)", count)
+	}
+	return ""
 }

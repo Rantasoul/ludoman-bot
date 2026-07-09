@@ -1,6 +1,7 @@
 package main
 
 import (
+	"database/sql"
 	"log"
 	"os"
 	"os/signal"
@@ -8,6 +9,7 @@ import (
 
 	"github.com/bwmarrin/discordgo"
 	"github.com/joho/godotenv"
+	_ "github.com/lib/pq"
 )
 
 var (
@@ -17,6 +19,7 @@ var (
 	LobbyChannelID   string
 	TargetRoleID     string
 	DotaRoleID       string
+	DB               *sql.DB
 )
 
 func main() {
@@ -35,6 +38,41 @@ func main() {
 	LobbyChannelID = os.Getenv("LOBBY_CHANNEL_ID")
 	TargetRoleID = os.Getenv("TARGET_ROLE_ID")
 	DotaRoleID = os.Getenv("DOTA_ROLE_ID")
+
+	// Подключаемся к базе данных Neon
+	dbURL := os.Getenv("DATABASE_URL")
+	if dbURL == "" {
+		log.Fatal("Ошибка: Переменная DATABASE_URL не установлена.")
+	}
+
+	DB, err = sql.Open("postgres", dbURL)
+	if err != nil {
+		log.Fatalf("Ошибка открытия базы данных: %v", err)
+	}
+	defer DB.Close()
+
+	// Проверяем, жива ли связь с базой
+	err = DB.Ping()
+	if err != nil {
+		log.Fatalf("Не удалось подключиться к базе данных: %v", err)
+	}
+	log.Println("Успешное подключение к базе данных Render!")
+
+	// АВТО-СОЗДАНИЕ ТАБЛИЦЫ: Бот сам создаст таблицу, если её ещё нет в базе
+	createTableSQL := `
+	CREATE TABLE IF NOT EXISTS lobby_votes (
+		message_id VARCHAR(32) NOT NULL,
+		user_id VARCHAR(32) NOT NULL,
+		current_choice VARCHAR(20) NOT NULL,
+		switch_count INT DEFAULT 0,
+		feedback_message_id VARCHAR(32),
+		PRIMARY KEY (message_id, user_id)
+	);`
+	_, err = DB.Exec(createTableSQL)
+	if err != nil {
+		log.Fatalf("Ошибка автоматического создания таблицы: %v", err)
+	}
+	log.Println("Таблица lobby_votes проверена/создана успешно!")
 
 	dg, err := discordgo.New("Bot " + BotToken)
 	if err != nil {

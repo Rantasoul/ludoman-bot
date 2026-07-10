@@ -130,6 +130,21 @@ func HandleInteractions(s *discordgo.Session, i *discordgo.InteractionCreate) {
 				cleanupPoll(s, pollMsg.ID, pollMsg.ChannelID)
 			}
 
+			//напоминание за 5 минут
+
+			reminderTime := targetTime.Add(-5 * time.Minute) // за 5 минут до сбора
+			timeUntilReminder := time.Until(reminderTime)
+
+			if timeUntilReminder > 0 {
+				log.Printf("📨 Напоминание запланировано на %s (через %v)", reminderTime.Format("15:04"), timeUntilReminder)
+				go func() {
+					time.Sleep(timeUntilReminder)
+					sendReminderToAll(s, pollMsg.ID)
+				}()
+			} else {
+				log.Printf("⚠️ Время напоминания уже прошло!")
+			}
+
 		case "setup_reg":
 			s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
 				Type: discordgo.InteractionResponseChannelMessageWithSource,
@@ -522,4 +537,56 @@ func parseTimeFromInput(input string) (time.Time, error) {
 	}
 
 	return parsedTime, nil
+}
+
+// sendReminderToAll отправляет личное сообщение всем, кто нажал "Я буду"
+func sendReminderToAll(s *discordgo.Session, pollMessageID string) {
+	// Получаем всех пользователей, которые нажали "lobby_go"
+	rows, err := DB.Query("SELECT user_id FROM lobby_votes WHERE message_id = $1 AND current_choice = 'lobby_go'", pollMessageID)
+	if err != nil {
+		log.Printf("Ошибка получения списка игроков для напоминания: %v", err)
+		return
+	}
+	defer rows.Close()
+
+	var userIDs []string
+	for rows.Next() {
+		var userID string
+		if err := rows.Scan(&userID); err == nil {
+			userIDs = append(userIDs, userID)
+		}
+	}
+	// Проверяем ошибки после завершения цикла
+	if err = rows.Err(); err != nil {
+		log.Printf("Ошибка при итерации по результатам: %v", err)
+	}
+
+	if len(userIDs) == 0 {
+		log.Printf("Нет игроков для напоминания (никто не нажал 'Я буду')")
+		return
+	}
+
+	log.Printf("📨 Отправляю напоминания %d игрокам...", len(userIDs))
+
+	for _, userID := range userIDs {
+		// Создаём личный канал с пользователем
+		channel, err := s.UserChannelCreate(userID)
+		if err != nil {
+			log.Printf("Не удалось создать канал с пользователем %s: %v", userID, err)
+			continue
+		}
+
+		// Отправляем сообщение
+		_, err = s.ChannelMessageSend(channel.ID, fmt.Sprintf(
+			"🔔 **Напоминание!**\n"+
+				"🕐 Сбор начинается через **5 минут**!\n"+
+				"🎮 Заходи, тебя все ждут!\n"+
+				"🏃‍♂️ Не опаздывай!",
+		))
+		if err != nil {
+			log.Printf("Не удалось отправить сообщение пользователю %s: %v", userID, err)
+		} else {
+			log.Printf("✅ Напоминание отправлено пользователю %s", userID)
+		}
+	}
 }

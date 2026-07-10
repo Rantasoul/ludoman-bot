@@ -470,6 +470,10 @@ func cleanupPoll(s *discordgo.Session, pollMessageID, channelID string) {
 			feedbackIDs = append(feedbackIDs, feedbackID.String)
 		}
 	}
+	// Проверяем ошибки после завершения цикла
+	if err = rows.Err(); err != nil {
+		log.Printf("Ошибка при итерации по результатам: %v", err)
+	}
 
 	// 2. Удаляем фидбек-сообщения из Discord
 	for _, fbID := range feedbackIDs {

@@ -50,7 +50,7 @@ func sendRegButton(s *discordgo.Session, userID string, channelID string) {
 // Основной распределитель всех интеракций на сервере
 func HandleInteractions(s *discordgo.Session, i *discordgo.InteractionCreate) {
 
-	// 1. СЛЕШ-КОМАНДЫ (/opros и /setup_reg)
+	// СЛЕШ-КОМАНДЫ (/opros и /setup_reg)
 
 	if i.Type == discordgo.InteractionApplicationCommand {
 		switch i.ApplicationCommandData().Name {
@@ -132,7 +132,7 @@ func HandleInteractions(s *discordgo.Session, i *discordgo.InteractionCreate) {
 
 			//напоминание за 5 минут
 
-			reminderTime := targetTime.Add(-5 * time.Minute) // за 5 минут до сбора
+			reminderTime := targetTime.Add(-5 * time.Minute) 
 			timeUntilReminder := time.Until(reminderTime)
 
 			if timeUntilReminder > 0 {
@@ -150,7 +150,7 @@ func HandleInteractions(s *discordgo.Session, i *discordgo.InteractionCreate) {
 				Type: discordgo.InteractionResponseChannelMessageWithSource,
 				Data: &discordgo.InteractionResponseData{
 					Content: "👋 Нажми кнопку ниже, чтобы пройти регистрацию!",
-					Flags:   discordgo.MessageFlagsEphemeral, // <-- ДОБАВИТЬ ЭТУ СТРОКУ!
+					Flags:   discordgo.MessageFlagsEphemeral, 
 					Components: []discordgo.MessageComponent{
 						discordgo.ActionsRow{
 							Components: []discordgo.MessageComponent{
@@ -168,7 +168,7 @@ func HandleInteractions(s *discordgo.Session, i *discordgo.InteractionCreate) {
 		}
 		return
 	}
-	// 2. ОБРАБОТКА НАЖАТИЙ НА КНОПКИ
+	// ОБРАБОТКА НАЖАТИЙ НА КНОПКИ
 
 	if i.Type == discordgo.InteractionMessageComponent {
 		customID := i.MessageComponentData().CustomID
@@ -334,7 +334,7 @@ func HandleInteractions(s *discordgo.Session, i *discordgo.InteractionCreate) {
 		return
 	}
 
-	// 3. ОБРАБОТКА МОДАЛЬНЫХ ОКОН
+	// ОБРАБОТКА МОДАЛЬНЫХ ОКОН
 
 	if i.Type == discordgo.InteractionModalSubmit {
 		if i.ModalSubmitData().CustomID == "registration_modal" {
@@ -422,7 +422,7 @@ func HandleInteractions(s *discordgo.Session, i *discordgo.InteractionCreate) {
 					},
 				})
 
-				// можно отправить сообщение в канал, что кто-то обновился
+				// сообщение в канал, что кто-то обновился
 				if WelcomeChannelID != "" {
 					s.ChannelMessageSend(WelcomeChannelID, fmt.Sprintf("📝 Лудик <@%s> обновил свой профиль! Новый ник нюхача: **%s**", i.Member.User.ID, newNickname))
 				}
@@ -466,11 +466,11 @@ func updateButtonLabel(customID string, count int) string {
 	return ""
 }
 
-// cleanupPoll удаляет сообщение опроса и все связанные с ним фидбек-сообщения
+// удаляет сообщение опроса и все связанные с ним фидбек-сообщения
 func cleanupPoll(s *discordgo.Session, pollMessageID, channelID string) {
 	log.Printf("🧹 Начинаю очистку опроса %s", pollMessageID)
 
-	// 1. Удаляем все фидбек-сообщения из базы данных
+	// Удаляем все фидбек-сообщения из базы данных
 	rows, err := DB.Query("SELECT feedback_message_id FROM lobby_votes WHERE message_id = $1", pollMessageID)
 	if err != nil {
 		log.Printf("Ошибка получения фидбек-сообщений для очистки: %v", err)
@@ -490,31 +490,31 @@ func cleanupPoll(s *discordgo.Session, pollMessageID, channelID string) {
 		log.Printf("Ошибка при итерации по результатам: %v", err)
 	}
 
-	// 2. Удаляем фидбек-сообщения из Discord
+	// Удаляем фидбек-сообщения из Discord
 	for _, fbID := range feedbackIDs {
 		if err := s.ChannelMessageDelete(channelID, fbID); err != nil {
 			log.Printf("Не удалось удалить фидбек %s: %v", fbID, err)
 		}
 	}
 
-	// 3. Удаляем само сообщение с опросом
+	// Удаляем само сообщение с опросом
 	if err := s.ChannelMessageDelete(channelID, pollMessageID); err != nil {
 		log.Printf("Не удалось удалить сообщение опроса %s: %v", pollMessageID, err)
 	}
 
-	// 4. Удаляем все записи из БД для этого опроса
+	// Удаляем все записи из БД для этого опроса
 	_, err = DB.Exec("DELETE FROM lobby_votes WHERE message_id = $1", pollMessageID)
 	if err != nil {
 		log.Printf("Ошибка удаления записей из БД: %v", err)
 	}
 
-	// 5. Отправляем уведомление в канал
+	// Отправляем уведомление в канал
 	s.ChannelMessageSend(channelID, "🧹 **Канал очищен!** Все голоса и сообщения о сборе удалены.")
 
 	log.Printf("✅ Очистка опроса %s завершена", pollMessageID)
 }
 
-// parseTimeFromInput парсит время из строки вида "19:00"
+//  парсит время из строки вида "19:00"
 func parseTimeFromInput(input string) (time.Time, error) {
 	layouts := []string{"15:04", "15:04:05"}
 	var parsedTime time.Time
@@ -539,7 +539,7 @@ func parseTimeFromInput(input string) (time.Time, error) {
 	return parsedTime, nil
 }
 
-// sendReminderToAll отправляет личное сообщение всем, кто нажал "Я буду"
+//  отправляет личное сообщение всем, кто нажал "Я буду"
 func sendReminderToAll(s *discordgo.Session, pollMessageID string) {
 	// Получаем всех пользователей, которые нажали "lobby_go"
 	rows, err := DB.Query("SELECT user_id FROM lobby_votes WHERE message_id = $1 AND current_choice = 'lobby_go'", pollMessageID)

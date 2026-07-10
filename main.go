@@ -24,6 +24,8 @@ var (
 )
 
 func main() {
+	loc, _ := time.LoadLocation("Europe/Moscow") 
+	time.Local = loc
 	// ЗАГЛУШКА ДЛЯ RENDER
 	go func() {
 		port := os.Getenv("PORT")

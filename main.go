@@ -44,7 +44,7 @@ func main() {
 
 	go func() {
 		for {
-			time.Sleep(1 * time.Minute)
+			time.Sleep(3 * time.Minute)
 			url := "https://ludoman-bot-2f0s.onrender.com"
 			resp, err := http.Get(url)
 			if err != nil {

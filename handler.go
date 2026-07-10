@@ -6,6 +6,7 @@ import (
 	"log"
 	"regexp"
 	"strconv"
+	"time"
 
 	"github.com/bwmarrin/discordgo"
 	_ "github.com/lib/pq"
@@ -54,7 +55,6 @@ func HandleInteractions(s *discordgo.Session, i *discordgo.InteractionCreate) {
 	if i.Type == discordgo.InteractionApplicationCommand {
 		switch i.ApplicationCommandData().Name {
 		case "opros":
-			// Проверяем, в том ли чате вызвана команда
 			if i.ChannelID != LobbyChannelID {
 				s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
 					Type: discordgo.InteractionResponseChannelMessageWithSource,
@@ -72,18 +72,34 @@ func HandleInteractions(s *discordgo.Session, i *discordgo.InteractionCreate) {
 				inputTime = options[0].StringValue()
 			}
 
-			msgText := fmt.Sprintf("🔔 **СБОР НА КАТКУ!** <@&%s>\n📊 Собираем лобби 5х5 в **%s**", DotaRoleID, inputTime)
+			// Парсим время, указанное пользователем
+			targetTime, err := parseTimeFromInput(inputTime)
+			if err != nil {
+				s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
+					Type: discordgo.InteractionResponseChannelMessageWithSource,
+					Data: &discordgo.InteractionResponseData{
+						Content: fmt.Sprintf("❌ Не удалось распознать время: %s\nИспользуйте формат: 19:00", inputTime),
+						Flags:   discordgo.MessageFlagsEphemeral,
+					},
+				})
+				return
+			}
 
-			// Отвечаем админу скрытым сообщением об успехе
+			// Время очистки = указанное время + 20 минут
+			cleanupTime := targetTime.Add(20 * time.Minute)
+
+			msgText := fmt.Sprintf("🔔 **СБОР НА КАТКУ!** <@&%s>\n📊 Собираем лобби 5х5 в **%s**\n⏰ Очистка в: **%s**", DotaRoleID, inputTime, cleanupTime.Format("15:04"))
+
 			s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
 				Type: discordgo.InteractionResponseChannelMessageWithSource,
 				Data: &discordgo.InteractionResponseData{
-					Content: "🚀 Опрос успешно создан!",
+					Content: fmt.Sprintf("🚀 Опрос создан!\n🕐 Очистка через 20 минут после сбора (в %s)", cleanupTime.Format("15:04")),
 					Flags:   discordgo.MessageFlagsEphemeral,
 				},
 			})
 
-			_, err := s.ChannelMessageSendComplex(LobbyChannelID, &discordgo.MessageSend{
+			// Отправляем сообщение с опросом
+			pollMsg, err := s.ChannelMessageSendComplex(LobbyChannelID, &discordgo.MessageSend{
 				Content: msgText,
 				Components: []discordgo.MessageComponent{
 					discordgo.ActionsRow{
@@ -96,7 +112,22 @@ func HandleInteractions(s *discordgo.Session, i *discordgo.InteractionCreate) {
 				},
 			})
 			if err != nil {
-				log.Printf("Не удалось отправить лобби: %v", err)
+				log.Printf("Не удалось отправить опрос: %v", err)
+				return
+			}
+
+			// Запускаем горутину для очистки в нужное время
+			timeUntilCleanup := time.Until(cleanupTime)
+			if timeUntilCleanup > 0 {
+				log.Printf("⏰ Очистка запланирована на %s (через %v)", cleanupTime.Format("15:04"), timeUntilCleanup)
+				go func() {
+					time.Sleep(timeUntilCleanup)
+					cleanupPoll(s, pollMsg.ID, pollMsg.ChannelID)
+				}()
+			} else {
+				log.Printf("⚠️ Время очистки уже прошло!")
+				s.ChannelMessageSend(LobbyChannelID, "⚠️ Время для очистки уже прошло, опрос будет удалён сейчас.")
+				cleanupPoll(s, pollMsg.ID, pollMsg.ChannelID)
 			}
 
 		case "setup_reg":
@@ -376,7 +407,7 @@ func HandleInteractions(s *discordgo.Session, i *discordgo.InteractionCreate) {
 					},
 				})
 
-				// Дополнительно: можно отправить сообщение в канал, что кто-то обновился
+				// можно отправить сообщение в канал, что кто-то обновился
 				if WelcomeChannelID != "" {
 					s.ChannelMessageSend(WelcomeChannelID, fmt.Sprintf("📝 Лудик <@%s> обновил свой профиль! Новый ник нюхача: **%s**", i.Member.User.ID, newNickname))
 				}
@@ -418,4 +449,73 @@ func updateButtonLabel(customID string, count int) string {
 		return fmt.Sprintf("Позже (%d)", count)
 	}
 	return ""
+}
+
+// cleanupPoll удаляет сообщение опроса и все связанные с ним фидбек-сообщения
+func cleanupPoll(s *discordgo.Session, pollMessageID, channelID string) {
+	log.Printf("🧹 Начинаю очистку опроса %s", pollMessageID)
+
+	// 1. Удаляем все фидбек-сообщения из базы данных
+	rows, err := DB.Query("SELECT feedback_message_id FROM lobby_votes WHERE message_id = $1", pollMessageID)
+	if err != nil {
+		log.Printf("Ошибка получения фидбек-сообщений для очистки: %v", err)
+		return
+	}
+	defer rows.Close()
+
+	var feedbackIDs []string
+	for rows.Next() {
+		var feedbackID sql.NullString
+		if err := rows.Scan(&feedbackID); err == nil && feedbackID.Valid && feedbackID.String != "" {
+			feedbackIDs = append(feedbackIDs, feedbackID.String)
+		}
+	}
+
+	// 2. Удаляем фидбек-сообщения из Discord
+	for _, fbID := range feedbackIDs {
+		if err := s.ChannelMessageDelete(channelID, fbID); err != nil {
+			log.Printf("Не удалось удалить фидбек %s: %v", fbID, err)
+		}
+	}
+
+	// 3. Удаляем само сообщение с опросом
+	if err := s.ChannelMessageDelete(channelID, pollMessageID); err != nil {
+		log.Printf("Не удалось удалить сообщение опроса %s: %v", pollMessageID, err)
+	}
+
+	// 4. Удаляем все записи из БД для этого опроса
+	_, err = DB.Exec("DELETE FROM lobby_votes WHERE message_id = $1", pollMessageID)
+	if err != nil {
+		log.Printf("Ошибка удаления записей из БД: %v", err)
+	}
+
+	// 5. Отправляем уведомление в канал
+	s.ChannelMessageSend(channelID, "🧹 **Канал очищен!** Все голоса и сообщения о сборе удалены.")
+
+	log.Printf("✅ Очистка опроса %s завершена", pollMessageID)
+}
+
+// parseTimeFromInput парсит время из строки вида "19:00"
+func parseTimeFromInput(input string) (time.Time, error) {
+	layouts := []string{"15:04", "15:04:05"}
+	var parsedTime time.Time
+	var err error
+	for _, layout := range layouts {
+		parsedTime, err = time.Parse(layout, input)
+		if err == nil {
+			break
+		}
+	}
+	if err != nil {
+		return time.Time{}, fmt.Errorf("не удалось распарсить время: %s", input)
+	}
+
+	now := time.Now()
+	parsedTime = time.Date(now.Year(), now.Month(), now.Day(), parsedTime.Hour(), parsedTime.Minute(), 0, 0, now.Location())
+
+	if parsedTime.Before(now) {
+		parsedTime = parsedTime.Add(24 * time.Hour)
+	}
+
+	return parsedTime, nil
 }

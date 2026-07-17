@@ -24,7 +24,7 @@ var (
 )
 
 func main() {
-	loc, _ := time.LoadLocation("Europe/Moscow") 
+	loc, _ := time.LoadLocation("Europe/Moscow")
 	time.Local = loc
 	// ЗАГЛУШКА ДЛЯ RENDER
 	go func() {

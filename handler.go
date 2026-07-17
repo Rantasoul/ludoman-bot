@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"fmt"
 	"log"
+	"ludoman-bot/functions"
 	"regexp"
 	"strconv"
 	"time"
@@ -18,33 +19,7 @@ func HandleUserJoin(s *discordgo.Session, m *discordgo.GuildMemberAdd) {
 		log.Println("Ошибка: Не задан WELCOME_CHANNEL_ID в .env")
 		return
 	}
-	sendRegButton(s, m.User.ID, WelcomeChannelID)
-}
-
-// Вспомогательная функция, которая рисует сообщение с кнопкой регистрации
-func sendRegButton(s *discordgo.Session, userID string, channelID string) {
-	content := "Приветствую на сервере УДОВОЛЬСТВИЕ! Нажми кнопку ниже, чтобы пройти регистрацию."
-	if userID != "" {
-		content = fmt.Sprintf("👋 Приветствуем нового лудика, <@%s>! Нажми кнопку ниже, чтобы пройти регистрацию и получить по заслугам.", userID)
-	}
-
-	_, err := s.ChannelMessageSendComplex(channelID, &discordgo.MessageSend{
-		Content: content,
-		Components: []discordgo.MessageComponent{
-			discordgo.ActionsRow{
-				Components: []discordgo.MessageComponent{
-					discordgo.Button{
-						Label:    "📝 Пройти регистрацию",
-						Style:    discordgo.PrimaryButton,
-						CustomID: "start_registration",
-					},
-				},
-			},
-		},
-	})
-	if err != nil {
-		log.Printf("Не удалось отправить кнопку регистрации: %v", err)
-	}
+	functions.SendRegButton(s, m.User.ID, WelcomeChannelID)
 }
 
 // Основной распределитель всех интеракций на сервере
@@ -73,7 +48,7 @@ func HandleInteractions(s *discordgo.Session, i *discordgo.InteractionCreate) {
 			}
 
 			// Парсим время, указанное пользователем
-			targetTime, err := parseTimeFromInput(inputTime)
+			targetTime, err := functions.ParseTimeFromInput(inputTime)
 			if err != nil {
 				s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
 					Type: discordgo.InteractionResponseChannelMessageWithSource,
@@ -122,24 +97,24 @@ func HandleInteractions(s *discordgo.Session, i *discordgo.InteractionCreate) {
 				log.Printf("⏰ Очистка запланирована на %s (через %v)", cleanupTime.Format("15:04"), timeUntilCleanup)
 				go func() {
 					time.Sleep(timeUntilCleanup)
-					cleanupPoll(s, pollMsg.ID, pollMsg.ChannelID)
+					functions.CleanupPoll(s, pollMsg.ID, pollMsg.ChannelID, DB)
 				}()
 			} else {
 				log.Printf("⚠️ Время очистки уже прошло!")
 				s.ChannelMessageSend(LobbyChannelID, "⚠️ Время для очистки уже прошло, опрос будет удалён сейчас.")
-				cleanupPoll(s, pollMsg.ID, pollMsg.ChannelID)
+				functions.CleanupPoll(s, pollMsg.ID, pollMsg.ChannelID, DB)
 			}
 
 			//напоминание за 5 минут
 
-			reminderTime := targetTime.Add(-5 * time.Minute) 
+			reminderTime := targetTime.Add(-5 * time.Minute)
 			timeUntilReminder := time.Until(reminderTime)
 
 			if timeUntilReminder > 0 {
 				log.Printf("📨 Напоминание запланировано на %s (через %v)", reminderTime.Format("15:04"), timeUntilReminder)
 				go func() {
 					time.Sleep(timeUntilReminder)
-					sendReminderToAll(s, pollMsg.ID)
+					functions.SendReminderToAll(s, pollMsg.ID, DB)
 				}()
 			} else {
 				log.Printf("⚠️ Время напоминания уже прошло!")
@@ -150,7 +125,7 @@ func HandleInteractions(s *discordgo.Session, i *discordgo.InteractionCreate) {
 				Type: discordgo.InteractionResponseChannelMessageWithSource,
 				Data: &discordgo.InteractionResponseData{
 					Content: "👋 Нажми кнопку ниже, чтобы пройти регистрацию!",
-					Flags:   discordgo.MessageFlagsEphemeral, 
+					Flags:   discordgo.MessageFlagsEphemeral,
 					Components: []discordgo.MessageComponent{
 						discordgo.ActionsRow{
 							Components: []discordgo.MessageComponent{
@@ -203,7 +178,7 @@ func HandleInteractions(s *discordgo.Session, i *discordgo.InteractionCreate) {
 			err := DB.QueryRow("SELECT current_choice, switch_count, feedback_message_id FROM lobby_votes WHERE message_id = $1 AND user_id = $2", message.ID, userID).
 				Scan(&currentChoice, &switchCount, &oldFeedbackMsgID)
 
-			// Лимит: если чувак пытается переголосовать уже во ВТОРОЙ раз (switch_count >= 1)
+			// если пытается переголосовать уже во ВТОРОЙ раз (switch_count >= 1)
 			if err == nil && switchCount >= 1 && currentChoice != customID {
 				s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
 					Type: discordgo.InteractionResponseChannelMessageWithSource,
@@ -242,7 +217,7 @@ func HandleInteractions(s *discordgo.Session, i *discordgo.InteractionCreate) {
 						if count > 0 {
 							count--
 						}
-						button.Label = updateButtonLabel(button.CustomID, count)
+						button.Label = functions.UpdateButtonLabel(button.CustomID, count)
 					}
 				}
 
@@ -252,7 +227,7 @@ func HandleInteractions(s *discordgo.Session, i *discordgo.InteractionCreate) {
 					if len(matches) > 1 {
 						count, _ := strconv.Atoi(matches[1])
 						count++
-						button.Label = updateButtonLabel(button.CustomID, count)
+						button.Label = functions.UpdateButtonLabel(button.CustomID, count)
 					}
 				}
 				actionRow.Components[idx] = button
@@ -315,20 +290,25 @@ func HandleInteractions(s *discordgo.Session, i *discordgo.InteractionCreate) {
 			}
 
 			// ОБНОВЛЯЕМ БАЗУ ДАННЫХ
-			if err == sql.ErrNoRows {
+			switch err {
+			case sql.ErrNoRows:
 				// Первое нажатие
 				_, errInsert := DB.Exec("INSERT INTO lobby_votes (message_id, user_id, current_choice, switch_count, feedback_message_id) VALUES ($1, $2, $3, $4, $5)",
 					message.ID, userID, customID, 0, newFeedbackID)
 				if errInsert != nil {
 					log.Printf("Ошибка INSERT в БД: %v", errInsert)
 				}
-			} else if err == nil {
+
+			case nil:
 				// Переголосование
 				_, errUpdate := DB.Exec("UPDATE lobby_votes SET current_choice = $1, switch_count = switch_count + 1, feedback_message_id = $2 WHERE message_id = $3 AND user_id = $4",
 					customID, newFeedbackID, message.ID, userID)
 				if errUpdate != nil {
 					log.Printf("Ошибка UPDATE в БД: %v", errUpdate)
 				}
+
+			default:
+				log.Printf("Необработанная ошибка: %v", err)
 			}
 		}
 		return
@@ -450,143 +430,6 @@ func HandleInteractions(s *discordgo.Session, i *discordgo.InteractionCreate) {
 					Content: fmt.Sprintf("🎉 Встречайте нового фрика — **%s**!\nРоль успешно выдана, добро пожаловать в семью! 🎰", newNickname),
 				},
 			})
-		}
-	}
-}
-
-func updateButtonLabel(customID string, count int) string {
-	switch customID {
-	case "lobby_go":
-		return fmt.Sprintf("Я буду (%d)", count)
-	case "lobby_clown":
-		return fmt.Sprintf("Я долбоеб (%d)", count)
-	case "lobby_later":
-		return fmt.Sprintf("Позже (%d)", count)
-	}
-	return ""
-}
-
-// удаляет сообщение опроса и все связанные с ним фидбек-сообщения
-func cleanupPoll(s *discordgo.Session, pollMessageID, channelID string) {
-	log.Printf("🧹 Начинаю очистку опроса %s", pollMessageID)
-
-	// Удаляем все фидбек-сообщения из базы данных
-	rows, err := DB.Query("SELECT feedback_message_id FROM lobby_votes WHERE message_id = $1", pollMessageID)
-	if err != nil {
-		log.Printf("Ошибка получения фидбек-сообщений для очистки: %v", err)
-		return
-	}
-	defer rows.Close()
-
-	var feedbackIDs []string
-	for rows.Next() {
-		var feedbackID sql.NullString
-		if err := rows.Scan(&feedbackID); err == nil && feedbackID.Valid && feedbackID.String != "" {
-			feedbackIDs = append(feedbackIDs, feedbackID.String)
-		}
-	}
-	// Проверяем ошибки после завершения цикла
-	if err = rows.Err(); err != nil {
-		log.Printf("Ошибка при итерации по результатам: %v", err)
-	}
-
-	// Удаляем фидбек-сообщения из Discord
-	for _, fbID := range feedbackIDs {
-		if err := s.ChannelMessageDelete(channelID, fbID); err != nil {
-			log.Printf("Не удалось удалить фидбек %s: %v", fbID, err)
-		}
-	}
-
-	// Удаляем само сообщение с опросом
-	if err := s.ChannelMessageDelete(channelID, pollMessageID); err != nil {
-		log.Printf("Не удалось удалить сообщение опроса %s: %v", pollMessageID, err)
-	}
-
-	// Удаляем все записи из БД для этого опроса
-	_, err = DB.Exec("DELETE FROM lobby_votes WHERE message_id = $1", pollMessageID)
-	if err != nil {
-		log.Printf("Ошибка удаления записей из БД: %v", err)
-	}
-
-	// Отправляем уведомление в канал
-	s.ChannelMessageSend(channelID, "🧹 **Канал очищен!** Все голоса и сообщения о сборе удалены.")
-
-	log.Printf("✅ Очистка опроса %s завершена", pollMessageID)
-}
-
-//  парсит время из строки вида "19:00"
-func parseTimeFromInput(input string) (time.Time, error) {
-	layouts := []string{"15:04", "15:04:05"}
-	var parsedTime time.Time
-	var err error
-	for _, layout := range layouts {
-		parsedTime, err = time.Parse(layout, input)
-		if err == nil {
-			break
-		}
-	}
-	if err != nil {
-		return time.Time{}, fmt.Errorf("не удалось распарсить время: %s", input)
-	}
-
-	now := time.Now()
-	parsedTime = time.Date(now.Year(), now.Month(), now.Day(), parsedTime.Hour(), parsedTime.Minute(), 0, 0, now.Location())
-
-	if parsedTime.Before(now) {
-		parsedTime = parsedTime.Add(24 * time.Hour)
-	}
-
-	return parsedTime, nil
-}
-
-//  отправляет личное сообщение всем, кто нажал "Я буду"
-func sendReminderToAll(s *discordgo.Session, pollMessageID string) {
-	// Получаем всех пользователей, которые нажали "lobby_go"
-	rows, err := DB.Query("SELECT user_id FROM lobby_votes WHERE message_id = $1 AND current_choice = 'lobby_go'", pollMessageID)
-	if err != nil {
-		log.Printf("Ошибка получения списка игроков для напоминания: %v", err)
-		return
-	}
-	defer rows.Close()
-
-	var userIDs []string
-	for rows.Next() {
-		var userID string
-		if err := rows.Scan(&userID); err == nil {
-			userIDs = append(userIDs, userID)
-		}
-	}
-	// Проверяем ошибки после завершения цикла
-	if err = rows.Err(); err != nil {
-		log.Printf("Ошибка при итерации по результатам: %v", err)
-	}
-
-	if len(userIDs) == 0 {
-		log.Printf("Нет игроков для напоминания (никто не нажал 'Я буду')")
-		return
-	}
-
-	log.Printf("📨 Отправляю напоминания %d игрокам...", len(userIDs))
-
-	for _, userID := range userIDs {
-		// Создаём личный канал с пользователем
-		channel, err := s.UserChannelCreate(userID)
-		if err != nil {
-			log.Printf("Не удалось создать канал с пользователем %s: %v", userID, err)
-			continue
-		}
-
-		// Отправляем сообщение
-		_, err = s.ChannelMessageSend(channel.ID, fmt.Sprintf(
-			"🔔 **Напоминание!**\n"+
-				"🕐 Сбор начинается через **5 минут**!\n"+
-				"🎮 Заходи, тебя все ждут!\n"+
-				"🏃‍♂️ Не опаздывай!",
-		))
-		if err != nil {
-			log.Printf("Не удалось отправить сообщение пользователю %s: %v", userID, err)
-		} else {
-			log.Printf("✅ Напоминание отправлено пользователю %s", userID)
 		}
 	}
 }

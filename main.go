@@ -18,8 +18,8 @@ var (
 	GuildID          string
 	WelcomeChannelID string
 	LobbyChannelID   string
-	TargetRoleID     string
 	DotaRoleID       string
+	CoopRoleID       string
 	DB               *sql.DB
 )
 
@@ -73,8 +73,8 @@ func main() {
 	GuildID = os.Getenv("GUILD_ID")
 	WelcomeChannelID = os.Getenv("WELCOME_CHANNEL_ID")
 	LobbyChannelID = os.Getenv("LOBBY_CHANNEL_ID")
-	TargetRoleID = os.Getenv("TARGET_ROLE_ID")
 	DotaRoleID = os.Getenv("DOTA_ROLE_ID")
+	CoopRoleID = os.Getenv("COOP_ROLE_ID")
 
 	// Подключаемся к базе данных Neon
 	dbURL := os.Getenv("DATABASE_URL")

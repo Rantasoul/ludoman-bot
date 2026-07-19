@@ -77,10 +77,6 @@ func ProcessCoopRegistration(s *discordgo.Session, i *discordgo.InteractionCreat
 			updateNotification = fmt.Sprintf("📝 Лудик <@%s> обновил свой кооп-профиль! Новый ник: **%s**", i.Member.User.ID, newNickname)
 		}
 
-		s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
-			Type: discordgo.InteractionResponseDeferredChannelMessageWithSource,
-		})
-
 		if welcomeChannelID != "" {
 			s.ChannelMessageSend(welcomeChannelID, updateNotification)
 		}
@@ -99,13 +95,6 @@ func ProcessCoopRegistration(s *discordgo.Session, i *discordgo.InteractionCreat
 		})
 		return
 	}
-
-	s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
-		Type: discordgo.InteractionResponseChannelMessageWithSource,
-		Data: &discordgo.InteractionResponseData{
-			Content: fmt.Sprintf("🎉 Встречайте нового кооп-фрика — **%s**!\nРоль успешно выдана, добро пожаловать в семью! 🤝🍆", newNickname),
-		},
-	})
 }
 
 // обрабатывает регистрацию дотера
@@ -191,10 +180,6 @@ func ProcessDotaRegistration(s *discordgo.Session, i *discordgo.InteractionCreat
 			}
 		}
 
-		s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
-			Type: discordgo.InteractionResponseDeferredChannelMessageWithSource,
-		})
-
 		if welcomeChannelID != "" && updateNotification != "" {
 			s.ChannelMessageSend(welcomeChannelID, updateNotification)
 		}
@@ -222,13 +207,4 @@ func ProcessDotaRegistration(s *discordgo.Session, i *discordgo.InteractionCreat
 	if modalID == "registration_modal_both" {
 		_ = s.GuildMemberRoleAdd(i.GuildID, i.Member.User.ID, coopRoleID)
 	}
-
-	welcomeText := fmt.Sprintf("🎉 Встречайте нового фрика — **%s**!\nРоль успешно выдана, добро пожаловать в семью! 🎰", newNickname)
-
-	s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
-		Type: discordgo.InteractionResponseChannelMessageWithSource,
-		Data: &discordgo.InteractionResponseData{
-			Content: welcomeText,
-		},
-	})
 }

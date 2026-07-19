@@ -254,8 +254,20 @@ func HandleInteractions(s *discordgo.Session, i *discordgo.InteractionCreate) {
 				}
 			}
 
-			// Вызываем функцию из functions с передачей всех параметров
+			s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
+				Type: discordgo.InteractionResponseDeferredChannelMessageWithSource,
+				Data: &discordgo.InteractionResponseData{
+					Flags: discordgo.MessageFlagsEphemeral,
+				},
+			})
+
 			functions.ProcessCoopRegistration(s, i, realName, DB, DotaRoleID, CoopRoleID, WelcomeChannelID)
+
+			content := "✅ Профиль успешно обновлён!"
+			s.InteractionResponseEdit(i.Interaction, &discordgo.WebhookEdit{
+				Content: &content,
+			})
+
 			return
 		}
 
@@ -278,8 +290,20 @@ func HandleInteractions(s *discordgo.Session, i *discordgo.InteractionCreate) {
 				}
 			}
 
-			// Вызываем функцию из functions с передачей всех параметров
+			s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
+				Type: discordgo.InteractionResponseDeferredChannelMessageWithSource,
+				Data: &discordgo.InteractionResponseData{
+					Flags: discordgo.MessageFlagsEphemeral,
+				},
+			})
+
 			functions.ProcessDotaRegistration(s, i, dotaNick, realName, dotaMMR, modalID, DB, DotaRoleID, CoopRoleID, WelcomeChannelID)
+
+			content := "✅ Профиль успешно обновлён!"
+			s.InteractionResponseEdit(i.Interaction, &discordgo.WebhookEdit{
+				Content: &content,
+			})
+
 			return
 		}
 	}

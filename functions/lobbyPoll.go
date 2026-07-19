@@ -121,6 +121,9 @@ func LobbyPoll(s *discordgo.Session, i *discordgo.InteractionCreate, customID st
 			Content: userFeedback,
 		},
 	})
+
+	log.Printf("Сообщение отправлено в тексовый канал:%v", errRespond)
+
 	if errRespond != nil {
 		log.Printf("Не удалось отправить фидбек: %v", errRespond)
 		return

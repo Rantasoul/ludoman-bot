@@ -16,6 +16,7 @@ func SendRegButton(s *discordgo.Session, userID string, channelID string) {
 
 	_, err := s.ChannelMessageSendComplex(channelID, &discordgo.MessageSend{
 		Content: content,
+		Flags:   discordgo.MessageFlagsEphemeral,
 		Components: []discordgo.MessageComponent{
 			discordgo.ActionsRow{
 				Components: []discordgo.MessageComponent{

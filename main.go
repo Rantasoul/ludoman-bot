@@ -18,7 +18,6 @@ var (
 	GuildID          string
 	WelcomeChannelID string
 	LobbyChannelID   string
-	ChatChannelID    string
 	DotaRoleID       string
 	CoopRoleID       string
 	CfAPIToken       string
@@ -80,15 +79,13 @@ func main() {
 	CoopRoleID = os.Getenv("COOP_ROLE_ID")
 	CfAPIToken = os.Getenv("CF_API_TOKEN")
 	CfAccountID = os.Getenv("CF_ACCOUNT_ID")
-	ChatChannelID = os.Getenv("ALL_CHAT_CHANNEL_ID")
 
 	log.Printf("🔍 BOT_TOKEN: %s", BotToken[:5])
 	log.Printf("🔍 GUILD_ID: %s", GuildID)
 	log.Printf("🔍 CfAPIToken: %s", CfAPIToken)
 	log.Printf("🔍 CfAccountID: %s", CfAccountID)
-	log.Printf("🔍 ChatChannelID: %s", ChatChannelID)
 
-	// Подключаемся к базе данных Neon
+	// Подключаемся к базе данных 
 	dbURL := os.Getenv("DATABASE_URL")
 	if dbURL == "" {
 		log.Fatal("Ошибка: Переменная DATABASE_URL не установлена.")

@@ -327,10 +327,6 @@ func HandleMessageCreate(s *discordgo.Session, m *discordgo.MessageCreate) {
 		return
 	}
 
-	if m.ChannelID != ChatChannelID {
-		return
-	}
-
 	botMention := "<@" + s.State.User.ID + ">"
 	botMentionWithExclamation := "<@!" + s.State.User.ID + ">"
 	if !strings.Contains(m.Content, botMention) && !strings.Contains(m.Content, botMentionWithExclamation) {

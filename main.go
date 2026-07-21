@@ -18,8 +18,11 @@ var (
 	GuildID          string
 	WelcomeChannelID string
 	LobbyChannelID   string
+	ChatChannelID    string
 	DotaRoleID       string
 	CoopRoleID       string
+	CfAPIToken       string
+	CfAccountID      string
 	DB               *sql.DB
 )
 
@@ -75,6 +78,15 @@ func main() {
 	LobbyChannelID = os.Getenv("LOBBY_CHANNEL_ID")
 	DotaRoleID = os.Getenv("DOTA_ROLE_ID")
 	CoopRoleID = os.Getenv("COOP_ROLE_ID")
+	CfAPIToken = os.Getenv("CF_API_TOKEN")
+	CfAccountID = os.Getenv("CF_ACCOUNT_ID")
+	ChatChannelID = os.Getenv("ALL_CHAT_CHANNEL_ID")
+
+	log.Printf("🔍 BOT_TOKEN: %s", BotToken[:5])
+	log.Printf("🔍 GUILD_ID: %s", GuildID)
+	log.Printf("🔍 CfAPIToken: %s", CfAPIToken)
+	log.Printf("🔍 CfAccountID: %s", CfAccountID)
+	log.Printf("🔍 ChatChannelID: %s", ChatChannelID)
 
 	// Подключаемся к базе данных Neon
 	dbURL := os.Getenv("DATABASE_URL")
@@ -116,10 +128,14 @@ func main() {
 		log.Fatalf("Ошибка создания сессии Discord: %v", err)
 	}
 
-	dg.Identify.Intents = discordgo.IntentsGuildMembers | discordgo.IntentsGuilds
+	dg.Identify.Intents = discordgo.IntentsGuildMembers |
+		discordgo.IntentsGuilds |
+		discordgo.IntentsMessageContent |
+		discordgo.IntentsGuildMessages
 
 	// Регистрируем обработчики
 	dg.AddHandler(HandleInteractions)
+	dg.AddHandler(HandleMessageCreate)
 	dg.AddHandler(HandleUserJoin)
 
 	err = dg.Open()
@@ -145,8 +161,7 @@ func main() {
 		{
 			Name:        "setup_reg",
 			Description: "Отправить кнопку начала регистрации в текущий канал",
-		},
-	}
+		}}
 
 	for _, v := range commands {
 		_, err := dg.ApplicationCommandCreate(dg.State.User.ID, GuildID, v)

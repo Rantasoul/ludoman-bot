@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log"
 	"ludoman-bot/functions"
+	"strings"
 	"time"
 
 	"github.com/bwmarrin/discordgo"
@@ -306,5 +307,62 @@ func HandleInteractions(s *discordgo.Session, i *discordgo.InteractionCreate) {
 
 			return
 		}
+	}
+}
+
+// Обработчик всех сообщений в чате
+func HandleMessageCreate(s *discordgo.Session, m *discordgo.MessageCreate) {
+	// Игнорируем сообщения от бота
+	if m.Author.ID == s.State.User.ID {
+		return
+	}
+
+	// Проверяем, что канал правильный
+	if m.ChannelID != ChatChannelID {
+		return
+	}
+
+	// Проверяем, упомянули ли бота
+	botMention := "<@" + s.State.User.ID + ">"
+	botMentionWithExclamation := "<@!" + s.State.User.ID + ">"
+	if !strings.Contains(m.Content, botMention) && !strings.Contains(m.Content, botMentionWithExclamation) {
+		return // НЕ ОТВЕЧАЕМ, если не тегнули
+	}
+
+	// Игнорируем команды
+	if strings.HasPrefix(m.Content, "/") {
+		return
+	}
+
+	// Убираем упоминание из текста
+	cleanContent := strings.ReplaceAll(m.Content, botMention, "")
+	cleanContent = strings.ReplaceAll(cleanContent, botMentionWithExclamation, "")
+	cleanContent = strings.TrimSpace(cleanContent)
+
+	// Если только тег — отвечаем жестко и сразу
+	if len(cleanContent) < 2 {
+		s.ChannelMessageSendReply(m.ChannelID, "Поставил твою маму на зелёное.", m.Reference())
+		time.Sleep(3 * time.Second)
+		s.ChannelTyping(m.ChannelID)
+		s.ChannelMessageSendReply(m.ChannelID, "Мамы больше нет.", m.Reference())
+		return
+	}
+
+	// Показываем, что бот печатает
+	s.ChannelTyping(m.ChannelID)
+
+	// ИСПРАВЛЕНО: Теперь вызываем AskAI без лишних аргументов.
+	// Функция сама возьмет CF_API_TOKEN и CF_ACCOUNT_ID из .env
+	answer := functions.AskAI(cleanContent, CfAPIToken, CfAccountID)
+
+	// Если ИИ выдал пустоту, Нейрохам не оправдывается, а агрессивно закрывает тему
+	if answer == "" {
+		answer = "У меня сервера расплавились от твоей тупости. Исчезни."
+	}
+
+	// Отправляем ответ в виде Reply (ответ на сообщение)
+	_, err := s.ChannelMessageSendReply(m.ChannelID, answer, m.Reference())
+	if err != nil {
+		log.Printf("❌ Ошибка отправки ответа Нейрохама: %v", err)
 	}
 }

@@ -35,6 +35,14 @@
 
 ### 3. Регистрация через команду (`/setup_reg`)
 - Любой игрок может вызвать команду и получить эфемерную кнопку для регистрации или обновления статуса.
+- **Команда работает только в приветственном канале!**
+
+### 4. AI-помощник «Нейрохам»
+- Бот отвечает на упоминания (`@Лудоман`) в чате.
+- Помогает игрокам с вопросами по серверу, регистрации и Dota 2.
+- Знает актуальную мету патча 7.41.
+- Отвечает коротко (1-2 предложения), с матом и дружеским стёбом.
+- Работает через **Cloudflare Workers AI** (модель Llama 3.1 8B).
 
 ---
 
@@ -42,32 +50,35 @@
 - **Язык:** Go (Golang) 1.25+
 - **Библиотека API:** [discordgo](https://github.com/bwmarrin/discordgo)
 - **База данных:** PostgreSQL (Neon / Render)
+- **AI:** Cloudflare Workers AI (Llama 3.1 8B)
 - **Менеджер секретов:** [godotenv](https://github.com/joho/godotenv)
 - **Хостинг:** Render.com (Background Worker + веб-заглушка)
 
 ---
 
 ## 📂 Структура проекта
-- **ludoman-bot/**
-  - **functions/**
-    - `cleanupPoll.go` — Очистка опросов
-    - `lobbyPoll.go` — Голосование в лобби
-    - `parseTimeFromInput.go` — Парсинг времени
-    - `registration.go` — Регистрация (Dota/Coop/Both)
-    - `sendRegButton.go` — Кнопка регистрации
-    - `sendReminderToAll.go` — Напоминания
-    - `updateButtonLabel.go` — Обновление кнопок
-  - `.env` — Переменные окружения
-  - `.gitignore` — Игнорируемые файлы
-  - `go.mod` — Зависимости
-  - `go.sum` — Контрольные суммы
-  - `handler.go` — Обработчики команд
-  - `main.go` — Точка входа
-  - `README.md` — Документация
+**ludoman-bot/**
+- **functions/**
+  - `cleanupPoll.go` — Очистка опросов
+  - `lobbyPoll.go` — Голосование в лобби
+  - `parseTimeFromInput.go` — Парсинг времени
+  - `registration.go` — Регистрация (Dota/Coop/Both)
+  - `sendRegButton.go` — Кнопка регистрации
+  - `sendReminderToAll.go` — Напоминания
+  - `updateButtonLabel.go` — Обновление кнопок
+- `.env` — Переменные окружения
+- `.gitignore` — Игнорируемые файлы
+- `go.mod` — Зависимости
+- `go.sum` — Контрольные суммы
+- `handler.go` — Обработчики команд
+- `main.go` — Точка входа
+- `README.md` — Документация
+
+text
 
 ---
 
-## Запуск
+## 🚀 Быстрый запуск
 
 ### 1. Требования
 Установите [Go](https://go.dev) версии **1.25+**.
@@ -81,32 +92,39 @@ cd ludoman-bot
 env
 DISCORD_BOT_TOKEN=токен_бота
 GUILD_ID=ID_сервера
-WELCOME_CHANNEL_ID=ID_канала_приветствий
+WELCOME_CHANNEL_ID=ID_канала_приветствий_и_регистраций
 LOBBY_CHANNEL_ID=ID_канала_лобби
 DOTA_ROLE_ID=ID_роли_Dota_2
 COOP_ROLE_ID=ID_роли_Coop
 DATABASE_URL=postgresql://username:password@host/database?sslmode=require
 
+# Для AI-помощника (Cloudflare Workers AI)
+CF_API_TOKEN=токен_от_Cloudflare
+CF_ACCOUNT_ID=айди_аккаунта_Cloudflare
 4. Настройка прав в Discord
-- Включите Developer Mode.
-- Пригласите бота с правами Administrator.
-- В настройках сервера → Роли перетащите роль бота в самый верх.
-- Убедитесь, что у роли бота есть права:
-Управлять никами,
-Управлять ролями,
+Включите Developer Mode.
+
+Пригласите бота с правами Administrator.
+
+В настройках сервера → Роли перетащите роль бота в самый верх.
+
+Убедитесь, что у роли бота есть права:
+
+Управлять никами
+
+Управлять ролями
+
 Отправлять сообщения
+
+Читать историю сообщений (для AI-помощника)
 
 5. База данных
 Бот использует PostgreSQL. При первом запуске автоматически создаётся таблица lobby_votes.
 
-6. Запуск
-bash
-go mod tidy
-go run .
-7. Деплой на Render
+6. Деплой на Render
 Залейте код на GitHub.
 
-Создайте на Render Background Worker (можно и  Web Service, но придется поддерживать жизнь бота через костыль(пинг)).
+Создайте на Render Background Worker (Web Service тоже подойдёт, но потребуется костыль-пинг, но бесплатно).
 
 Добавьте все переменные окружения из .env.
 

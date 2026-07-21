@@ -119,30 +119,37 @@ func HandleInteractions(s *discordgo.Session, i *discordgo.InteractionCreate) {
 			}
 
 		case "setup_reg":
-			s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
-				Type: discordgo.InteractionResponseChannelMessageWithSource,
-				Data: &discordgo.InteractionResponseData{
-					Content: "👋 Для обновления статуса жми на кнопку:",
-					Flags:   discordgo.MessageFlagsEphemeral,
-					Components: []discordgo.MessageComponent{
-						discordgo.ActionsRow{Components: []discordgo.MessageComponent{
-							discordgo.Button{
-								Label:    "📝 Обновить статус",
-								Style:    discordgo.PrimaryButton,
-								CustomID: "start_registration",
-							},
-						},
-						},
-					},
-				},
-			})
-			return
-		}
-		return
-	}
-
+    if i.ChannelID == WelcomeChannelID {
+        s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
+            Type: discordgo.InteractionResponseChannelMessageWithSource,
+            Data: &discordgo.InteractionResponseData{
+                Content: "👋 Для обновления статуса жми на кнопку:",
+                Flags:   discordgo.MessageFlagsEphemeral,
+                Components: []discordgo.MessageComponent{
+                    discordgo.ActionsRow{
+                        Components: []discordgo.MessageComponent{
+                            discordgo.Button{
+                                Label:    "📝 Обновить статус",
+                                Style:    discordgo.PrimaryButton,
+                                CustomID: "start_registration",
+                            },
+                        },
+                    },
+                },
+            },
+        })
+    } else {
+        s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
+            Type: discordgo.InteractionResponseChannelMessageWithSource,
+            Data: &discordgo.InteractionResponseData{
+                Content: fmt.Sprintf("❌ Эту команду можно использовать только в приветственном канале: <#%s>!", WelcomeChannelID),
+                Flags:   discordgo.MessageFlagsEphemeral,
+            },
+        })
+    }
+    return
+			
 	// ОБРАБОТКА НАЖАТИЙ НА КНОПКИ
-
 	if i.Type == discordgo.InteractionMessageComponent {
 		customID := i.MessageComponentData().CustomID
 

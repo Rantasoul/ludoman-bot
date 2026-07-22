@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log"
 	"ludoman-bot/functions"
+	"math/rand/v2"
 	"strings"
 	"time"
 
@@ -151,7 +152,7 @@ func HandleInteractions(s *discordgo.Session, i *discordgo.InteractionCreate) {
 		}
 		return
 	}
-			
+
 	// ОБРАБОТКА НАЖАТИЙ НА КНОПКИ
 	if i.Type == discordgo.InteractionMessageComponent {
 		customID := i.MessageComponentData().CustomID
@@ -322,7 +323,7 @@ func HandleInteractions(s *discordgo.Session, i *discordgo.InteractionCreate) {
 
 // Обработчик всех сообщений в чате
 func HandleMessageCreate(s *discordgo.Session, m *discordgo.MessageCreate) {
-	
+
 	if m.Author.ID == s.State.User.ID {
 		return
 	}
@@ -330,9 +331,9 @@ func HandleMessageCreate(s *discordgo.Session, m *discordgo.MessageCreate) {
 	botMention := "<@" + s.State.User.ID + ">"
 	botMentionWithExclamation := "<@!" + s.State.User.ID + ">"
 	if !strings.Contains(m.Content, botMention) && !strings.Contains(m.Content, botMentionWithExclamation) {
-		return 
+		return
 	}
-	
+
 	if strings.HasPrefix(m.Content, "/") {
 		return
 	}
@@ -343,9 +344,25 @@ func HandleMessageCreate(s *discordgo.Session, m *discordgo.MessageCreate) {
 
 	if len(cleanContent) < 2 {
 		s.ChannelMessageSendReply(m.ChannelID, "Поставил твою маму на зелёное.", m.Reference())
-		time.Sleep(3 * time.Second)
 		s.ChannelTyping(m.ChannelID)
-		s.ChannelMessageSendReply(m.ChannelID, "Мамы больше нет.", m.Reference())
+		time.Sleep(2 * time.Second)
+
+		bet := rand.N(37)
+		colorResult := "чёрное"
+		if bet%2 == 0 && bet != 0 {
+			colorResult = "красное"
+		} else if bet == 0 {
+			colorResult = "зелёное"
+		}
+
+		rollResult := ""
+		if bet == 0 {
+			rollResult = "Повезло, выпало ЗЕЛЁНОЕ! Мама придет домой! 🎉"
+		} else {
+			rollResult = fmt.Sprintf("Выпало **%s %d**. Мамы больше нет... ", colorResult, bet)
+		}
+
+		s.ChannelMessageSendReply(m.ChannelID, rollResult, m.Reference())
 		return
 	}
 
@@ -357,7 +374,7 @@ func HandleMessageCreate(s *discordgo.Session, m *discordgo.MessageCreate) {
 		answer = "У меня сервера расплавились от твоей тупости. Исчезни."
 	}
 
-	// ответ в виде Reply 
+	// ответ в виде Reply
 	_, err := s.ChannelMessageSendReply(m.ChannelID, answer, m.Reference())
 	if err != nil {
 		log.Printf("❌ Ошибка отправки ответа Лудомана: %v", err)

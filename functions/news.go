@@ -90,14 +90,11 @@ func SendNewsToChannel(s *discordgo.Session, channelID string, items []NewsItem)
 			continue
 		}
 
-		// Чистим заголовок
-		title := stripHTML(item.Title)
-		title = strings.TrimSpace(title)
-		title = removeLinks(title)
-
-		// Очищаем описание от HTML-тегов
+		// Чистка HTML-тегов
 		description := stripHTML(item.Description)
 		description = strings.TrimSpace(description)
+
+		// Удаляем ссылки из текста (чтобы не было дублей)
 		description = removeLinks(description)
 
 		// Отправляем только нормальные новости
@@ -110,6 +107,12 @@ func SendNewsToChannel(s *discordgo.Session, channelID string, items []NewsItem)
 			log.Printf("❌ Ошибка отправки новости: %v", err)
 		}
 	}
+}
+
+// удаляет ссылки из текста
+func removeLinks(text string) string {
+	re := regexp.MustCompile(`https?://\S+`)
+	return re.ReplaceAllString(text, "")
 }
 
 // периодическая проверку новостей

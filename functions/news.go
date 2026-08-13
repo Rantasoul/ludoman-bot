@@ -72,8 +72,8 @@ func GetNews(rssURL string) ([]NewsItem, error) {
 func SendNewsToChannel(s *discordgo.Session, channelID string, items []NewsItem) {
 
 	stopWords := []string{
-		"фрибет", "промокод", "БЕТБУМ", "Betboom",
-		"реклама", "ставки", "Реклама",
+		"фрибет", "промокод",
+		"реклама", "ставки",
 	}
 
 	for _, item := range items {
@@ -90,11 +90,14 @@ func SendNewsToChannel(s *discordgo.Session, channelID string, items []NewsItem)
 			continue
 		}
 
-		// Чистка HTML-тегов
+		// Чистка заголовка
+		title := stripHTML(item.Title)
+		title = strings.TrimSpace(title)
+		title = removeLinks(title)
+
+		// Чистка описания
 		description := stripHTML(item.Description)
 		description = strings.TrimSpace(description)
-
-		// Удаляем ссылки из текста (чтобы не было дублей)
 		description = removeLinks(description)
 
 		// Отправляем только нормальные новости
@@ -107,12 +110,6 @@ func SendNewsToChannel(s *discordgo.Session, channelID string, items []NewsItem)
 			log.Printf("❌ Ошибка отправки новости: %v", err)
 		}
 	}
-}
-
-// удаляет ссылки из текста
-func removeLinks(text string) string {
-	re := regexp.MustCompile(`https?://\S+`)
-	return re.ReplaceAllString(text, "")
 }
 
 // периодическая проверку новостей

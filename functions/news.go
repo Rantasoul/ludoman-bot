@@ -71,7 +71,7 @@ func SendNewsToChannel(s *discordgo.Session, channelID string, items []NewsItem)
 	}
 
 	for _, item := range items {
-
+		// Фильтр стоп-слов
 		skip := false
 		for _, word := range stopWords {
 			if strings.Contains(strings.ToLower(item.Title), strings.ToLower(word)) ||
@@ -84,9 +84,12 @@ func SendNewsToChannel(s *discordgo.Session, channelID string, items []NewsItem)
 			continue
 		}
 
-		// Чистка HTML-тегов
+		// Очищаем описание от HTML-тегов
 		description := stripHTML(item.Description)
 		description = strings.TrimSpace(description)
+
+		// Удаляем ссылки из текста (чтобы не было дублей)
+		description = removeLinks(description)
 
 		// Отправляем только нормальные новости
 		message := fmt.Sprintf("📰 **%s**\n%s\n🔗 %s", item.Title, description, item.Link)
@@ -98,6 +101,12 @@ func SendNewsToChannel(s *discordgo.Session, channelID string, items []NewsItem)
 			log.Printf("❌ Ошибка отправки новости: %v", err)
 		}
 	}
+}
+
+// удаляет ссылки из текста
+func removeLinks(text string) string {
+	re := regexp.MustCompile(`https?://\S+`)
+	return re.ReplaceAllString(text, "")
 }
 
 // периодическая проверку новостей

@@ -41,6 +41,12 @@ func stripHTML(s string) string {
 	return re.ReplaceAllString(s, "")
 }
 
+// удаляет ссылки из текста
+func removeLinks(text string) string {
+	re := regexp.MustCompile(`https?://\S+`)
+	return re.ReplaceAllString(text, "")
+}
+
 // получает и парсит RSS-ленту
 func GetNews(rssURL string) ([]NewsItem, error) {
 	resp, err := http.Get(rssURL)
@@ -71,7 +77,7 @@ func SendNewsToChannel(s *discordgo.Session, channelID string, items []NewsItem)
 	}
 
 	for _, item := range items {
-
+		// Фильтр стоп-слов
 		skip := false
 		for _, word := range stopWords {
 			if strings.Contains(strings.ToLower(item.Title), strings.ToLower(word)) ||
@@ -84,12 +90,18 @@ func SendNewsToChannel(s *discordgo.Session, channelID string, items []NewsItem)
 			continue
 		}
 
-		// Чистка HTML-тегов
+		// Чистим заголовок
+		title := stripHTML(item.Title)
+		title = strings.TrimSpace(title)
+		title = removeLinks(title)
+
+		// Очищаем описание от HTML-тегов
 		description := stripHTML(item.Description)
 		description = strings.TrimSpace(description)
+		description = removeLinks(description)
 
 		// Отправляем только нормальные новости
-		message := fmt.Sprintf("📰 **%s**\n%s\n🔗 %s", item.Title, description, item.Link)
+		message := fmt.Sprintf("📰 **%s**\n%s\n🔗 %s", title, description, item.Link)
 		if len(message) > 2000 {
 			message = message[:1997] + "..."
 		}

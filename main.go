@@ -147,7 +147,7 @@ func main() {
 
 	if NewsRSSURL != "" && NewsChannelID != "" {
 		log.Println("📡 Запуск парсера новостей...")
-		go functions.StartNewsPoller(dg, NewsChannelID, NewsRSSURL, 10*time.Minute)
+		go functions.StartNewsPoller(dg, NewsChannelID, NewsRSSURL, 5*time.Minute)
 	}
 
 	// Регистрируем слеш-команды

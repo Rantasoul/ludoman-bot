@@ -6,6 +6,8 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"regexp"
+	"strings"
 	"time"
 
 	"github.com/bwmarrin/discordgo"
@@ -33,7 +35,13 @@ type Channel struct {
 	Items       []NewsItem `xml:"item"`
 }
 
-// GetNews — получает и парсит RSS-ленту по URL
+// чистка хтмл
+func stripHTML(s string) string {
+	re := regexp.MustCompile(`<[^>]*>`)
+	return re.ReplaceAllString(s, "")
+}
+
+// получает и парсит RSS-ленту
 func GetNews(rssURL string) ([]NewsItem, error) {
 	resp, err := http.Get(rssURL)
 	if err != nil {
@@ -56,23 +64,35 @@ func GetNews(rssURL string) ([]NewsItem, error) {
 
 // отправляет новости в канал Discord
 func SendNewsToChannel(s *discordgo.Session, channelID string, items []NewsItem) {
+
+	stopWords := []string{
+		"фрибет", "промокод", "БЕТБУМ", "Betboom",
+		"реклама", "ставки", "Реклама",
+	}
+
 	for _, item := range items {
-		if item.Title == "" {
+
+		skip := false
+		for _, word := range stopWords {
+			if strings.Contains(strings.ToLower(item.Title), strings.ToLower(word)) ||
+				strings.Contains(strings.ToLower(item.Description), strings.ToLower(word)) {
+				skip = true
+				break
+			}
+		}
+		if skip {
 			continue
 		}
 
-		message := fmt.Sprintf(
-			"📰 **%s**\n%s\n🔗 %s",
-			item.Title,
-			item.Description,
-			item.Link,
-		)
+		// Чистка HTML-тегов
+		description := stripHTML(item.Description)
+		description = strings.TrimSpace(description)
 
-		// Discord лимит 2000 символов
+		// Отправляем только нормальные новости
+		message := fmt.Sprintf("📰 **%s**\n%s\n🔗 %s", item.Title, description, item.Link)
 		if len(message) > 2000 {
 			message = message[:1997] + "..."
 		}
-
 		_, err := s.ChannelMessageSend(channelID, message)
 		if err != nil {
 			log.Printf("❌ Ошибка отправки новости: %v", err)
@@ -80,7 +100,7 @@ func SendNewsToChannel(s *discordgo.Session, channelID string, items []NewsItem)
 	}
 }
 
-// периодическую проверку новостей
+// периодическая проверку новостей
 func StartNewsPoller(s *discordgo.Session, channelID, rssURL string, interval time.Duration) {
 	// Хранилище уже отправленных новостей (по GUID)
 	sentCache := make(map[string]bool)
@@ -107,13 +127,14 @@ func StartNewsPoller(s *discordgo.Session, channelID, rssURL string, interval ti
 				sentCache[guid] = true
 				SendNewsToChannel(s, channelID, []NewsItem{item})
 
+				// Небольшая задержка между новостями
 				time.Sleep(1 * time.Second)
 			}
 		}
 
 		log.Printf("✅ Проверка завершена, отправлено %d новых новостей", len(items)-len(sentCache))
 
-		// Очищаем кеш
+		// Очищаем кеш, если он слишком большой
 		if len(sentCache) > 1000 {
 			sentCache = make(map[string]bool)
 		}

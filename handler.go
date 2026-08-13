@@ -62,7 +62,7 @@ func HandleInteractions(s *discordgo.Session, i *discordgo.InteractionCreate) {
 			// Время очистки = указанное время + 20 минут
 			cleanupTime := targetTime.Add(20 * time.Minute)
 
-			msgText := fmt.Sprintf("🔔 **СБОР НА КАТКУ!** <@&%s>\n📊 Собираем лобби 5х5 в **%s**\n⏰ Очистка в: **%s**", DotaRoleID, inputTime, cleanupTime.Format("15:04"))
+			msgText := fmt.Sprintf("🔔 **СБОР НА КАТКУ!** <@&%s>\n📊 Собираем лобби 5х5 в **%s**", DotaRoleID, inputTime)
 
 			s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
 				Type: discordgo.InteractionResponseChannelMessageWithSource,

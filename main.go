@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"fmt"
 	"log"
+	"ludoman-bot/functions"
 	"net/http"
 	"os"
 	"time"
@@ -18,6 +19,8 @@ var (
 	GuildID          string
 	WelcomeChannelID string
 	LobbyChannelID   string
+	NewsChannelID    string
+	NewsRSSURL       string
 	DotaRoleID       string
 	CoopRoleID       string
 	CfAPIToken       string
@@ -75,6 +78,8 @@ func main() {
 	GuildID = os.Getenv("GUILD_ID")
 	WelcomeChannelID = os.Getenv("WELCOME_CHANNEL_ID")
 	LobbyChannelID = os.Getenv("LOBBY_CHANNEL_ID")
+	NewsChannelID = os.Getenv("NEWS_CHANNEL_ID")
+	NewsRSSURL = os.Getenv("NEWS_RSS_URL")
 	DotaRoleID = os.Getenv("DOTA_ROLE_ID")
 	CoopRoleID = os.Getenv("COOP_ROLE_ID")
 	CfAPIToken = os.Getenv("CF_API_TOKEN")
@@ -85,7 +90,7 @@ func main() {
 	log.Printf("🔍 CfAPIToken: %s", CfAPIToken)
 	log.Printf("🔍 CfAccountID: %s", CfAccountID)
 
-	// Подключаемся к базе данных 
+	// Подключаемся к базе данных
 	dbURL := os.Getenv("DATABASE_URL")
 	if dbURL == "" {
 		log.Fatal("Ошибка: Переменная DATABASE_URL не установлена.")
@@ -138,6 +143,11 @@ func main() {
 	err = dg.Open()
 	if err != nil {
 		log.Fatalf("Ошибка подключения к Discord: %v", err)
+	}
+
+	if NewsRSSURL != "" && NewsChannelID != "" {
+		log.Println("📡 Запуск парсера новостей...")
+		go functions.StartNewsPoller(dg, NewsChannelID, NewsRSSURL, 10*time.Minute)
 	}
 
 	// Регистрируем слеш-команды

@@ -52,7 +52,7 @@ func main() {
 	go func() {
 		for {
 			time.Sleep(3 * time.Minute)
-			url := "https://ludoman-bot-2f0s.onrender.com"
+			url := "https://ludoman-bot-1.onrender.com"
 			resp, err := http.Get(url)
 			if err != nil {
 				log.Printf("Пинг не удался: %v", err)
